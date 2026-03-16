@@ -235,6 +235,45 @@
   .lb-time { font-family: 'DM Mono', monospace; color: var(--accent); font-size: 0.8rem; }
   .lb-empty { color: var(--muted); font-size: 0.85rem; text-align: center; padding: 1rem; }
 
+  /* ===== HOW TO PLAY OVERLAY ===== */
+  #howToPlayOverlay { z-index: 80; background: rgba(10, 10, 18, 0.95); backdrop-filter: blur(12px); }
+
+  .htp-panel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    width: 92%; max-width: 480px; max-height: 85vh; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+
+  .htp-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border);
+  }
+  .htp-header h2 { font-size: 1.2rem; font-weight: 700; }
+
+  .htp-body {
+    padding: 1.5rem; overflow-y: auto; line-height: 1.7; font-size: 0.92rem; color: var(--text);
+  }
+
+  .htp-body h3 {
+    font-size: 0.95rem; font-weight: 700; color: var(--accent); margin-top: 1.25rem; margin-bottom: 0.4rem;
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .htp-body h3:first-child { margin-top: 0; }
+
+  .htp-body p { margin-bottom: 0.75rem; color: var(--text); }
+
+  .htp-body .htp-example {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1rem 1.25rem; margin: 0.75rem 0 1rem; font-family: 'DM Mono', monospace; font-size: 0.85rem;
+    line-height: 1.9; color: var(--muted);
+  }
+  .htp-body .htp-example span { color: var(--accent); font-weight: 500; }
+
+  .htp-body .htp-tip {
+    background: rgba(68, 136, 255, 0.08); border: 1px solid rgba(68, 136, 255, 0.2);
+    border-radius: 10px; padding: 0.85rem 1.1rem; margin-top: 0.75rem; font-size: 0.85rem; color: var(--blue);
+  }
+
   /* ===== STATS OVERLAY ===== */
   #statsOverlay { z-index: 80; background: rgba(10, 10, 18, 0.95); backdrop-filter: blur(12px); }
 
@@ -349,12 +388,55 @@
       <button class="auth-tab" onclick="switchAuthTab('signup')">Sign Up</button>
     </div>
     <div id="authForm">
-      <input class="auth-input" type="text" id="authUsername" placeholder="Username" autocomplete="off">
+      <input class="auth-input" type="email" id="authEmail" placeholder="Email" autocomplete="email">
       <input class="auth-input" type="password" id="authPassword" placeholder="Password">
+      <input class="auth-input" type="text" id="authDisplayName" placeholder="Display Name" autocomplete="off" style="display:none;">
       <button class="auth-submit" id="authSubmit" onclick="handleAuth()">Log In</button>
       <p class="auth-error" id="authError"></p>
     </div>
+    <div style="display:flex; align-items:center; gap:1rem; margin:1.25rem 0 0.75rem;">
+      <div style="flex:1; height:1px; background:var(--border);"></div>
+      <span style="color:var(--muted); font-size:0.8rem;">or</span>
+      <div style="flex:1; height:1px; background:var(--border);"></div>
+    </div>
+    <button class="auth-guest" onclick="handleGoogleSignIn()" style="margin-top:0; display:flex; align-items:center; justify-content:center; gap:0.5rem;">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#34A853" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#FBBC05" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Sign in with Google
+    </button>
     <button class="auth-guest" onclick="playAsGuest()">Play as Guest</button>
+  </div>
+</div>
+
+<!-- HOW TO PLAY OVERLAY -->
+<div class="overlay" id="howToPlayOverlay">
+  <div class="htp-panel">
+    <div class="htp-header">
+      <h2>How to Play</h2>
+      <button class="panel-close" onclick="closeHowToPlay()">&times;</button>
+    </div>
+    <div class="htp-body">
+      <h3>Goal</h3>
+      <p>You're given a set of numbers and a <strong>target number</strong>. Combine your numbers using math operations until you're left with one number that matches the target.</p>
+
+      <h3>How it works</h3>
+      <p>Each turn, pick <strong>two numbers</strong> and an <strong>operation</strong> (+, &minus;, &times;, &divide;). The two numbers are replaced by the result, so you have one fewer number each turn.</p>
+      <p>Keep combining until only <strong>one number remains</strong>. That final number must equal the target to win.</p>
+
+      <h3>Example</h3>
+      <div class="htp-example">
+        Target: <span>12</span><br>
+        Starting numbers: <span>1, 2, 3, 4, 5</span><br><br>
+        Step 1 &mdash; 5 + 4 = <span>9</span> &rarr; left with 1, 2, 3, <span>9</span><br>
+        Step 2 &mdash; 9 + 3 = <span>12</span> &rarr; left with 1, 2, <span>12</span><br>
+        Step 3 &mdash; 2 &minus; 1 = <span>1</span> &rarr; left with <span>1</span>, 12<br>
+        Step 4 &mdash; 12 &times; 1 = <span>12</span> &rarr; that's the target!
+      </div>
+
+      <h3>Controls</h3>
+      <p>Tap a <strong>number</strong>, then an <strong>operator</strong>, then a <strong>second number</strong> and hit <strong>Compute</strong>. Use <strong>Undo</strong> (or Ctrl+Z) to take back a step.</p>
+
+      <div class="htp-tip">Tip: You can use keyboard shortcuts &mdash; press +, -, *, / to select an operator, Enter to compute, and Ctrl+Z to undo.</div>
+    </div>
   </div>
 </div>
 
@@ -422,6 +504,7 @@
     <span class="user-badge" id="userBadge">Guest</span>
   </div>
   <div class="topbar-right">
+    <button class="btn-small" onclick="openHowToPlay()">How to Play</button>
     <button class="btn-small" id="statsBtn" onclick="openStats()">My Stats</button>
     <button class="btn-small" onclick="handleLogout()">Sign Out</button>
   </div>
@@ -482,6 +565,7 @@
 <canvas id="confetti"></canvas>
 
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 
 <script>
@@ -495,6 +579,8 @@ firebase.initializeApp({
   appId: "1:685334343246:web:a9c3f511208af171d91d1f"
 });
 const db = firebase.database();
+const auth = firebase.auth();
+const googleProvider = new firebase.auth.GoogleAuthProvider();
 
 const UNREACHABLE = new Set([76, 79, 86, 92, 94, 97, 98]);
 const ALL_TARGETS = [];
@@ -520,6 +606,7 @@ function switchAuthTab(mode) {
   document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
   document.querySelector(`.auth-tab:nth-child(${mode === 'login' ? 1 : 2})`).classList.add('active');
   document.getElementById('authSubmit').textContent = mode === 'login' ? 'Log In' : 'Create Account';
+  document.getElementById('authDisplayName').style.display = mode === 'signup' ? 'block' : 'none';
   document.getElementById('authError').textContent = '';
 }
 
@@ -528,50 +615,73 @@ document.querySelectorAll('.auth-input').forEach(input => {
 });
 
 async function handleAuth() {
-  const username = document.getElementById('authUsername').value.trim().toLowerCase();
+  const email = document.getElementById('authEmail').value.trim();
   const password = document.getElementById('authPassword').value;
   const err = document.getElementById('authError');
-  if (!username || !password) { err.textContent = 'Please fill in all fields.'; return; }
-  if (username.length < 3) { err.textContent = 'Username must be at least 3 characters.'; return; }
-  if (password.length < 4) { err.textContent = 'Password must be at least 4 characters.'; return; }
-  const passHash = await simpleHash(password);
-  const ref = db.ref('users/' + username);
-  const snap = await ref.once('value');
-  if (authMode === 'signup') {
-    if (snap.exists()) { err.textContent = 'Username already taken.'; return; }
-    await ref.set({ passHash, created: Date.now() });
-    currentUser = { username, isGuest: false };
-  } else {
-    if (!snap.exists()) { err.textContent = 'User not found.'; return; }
-    if (snap.val().passHash !== passHash) { err.textContent = 'Wrong password.'; return; }
-    currentUser = { username, isGuest: false };
+  if (!email || !password) { err.textContent = 'Please fill in all fields.'; return; }
+  try {
+    if (authMode === 'signup') {
+      const displayName = document.getElementById('authDisplayName').value.trim();
+      if (!displayName) { err.textContent = 'Please enter a display name.'; return; }
+      const cred = await auth.createUserWithEmailAndPassword(email, password);
+      await cred.user.updateProfile({ displayName });
+      await db.ref('users/' + cred.user.uid).set({ displayName, created: Date.now() });
+    } else {
+      await auth.signInWithEmailAndPassword(email, password);
+    }
+  } catch (e) {
+    const msgs = {
+      'auth/email-already-in-use': 'Email already in use.',
+      'auth/invalid-email': 'Invalid email address.',
+      'auth/weak-password': 'Password must be at least 6 characters.',
+      'auth/user-not-found': 'No account found with this email.',
+      'auth/wrong-password': 'Incorrect password.',
+      'auth/invalid-credential': 'Invalid email or password.',
+    };
+    err.textContent = msgs[e.code] || e.message;
   }
-  enterGame();
+}
+
+async function handleGoogleSignIn() {
+  try {
+    const result = await auth.signInWithPopup(googleProvider);
+    if (result.additionalUserInfo?.isNewUser) {
+      await db.ref('users/' + result.user.uid).set({ displayName: result.user.displayName, created: Date.now() });
+    }
+  } catch (e) {
+    if (e.code !== 'auth/popup-closed-by-user') {
+      document.getElementById('authError').textContent = e.message;
+    }
+  }
 }
 
 function playAsGuest() {
-  currentUser = { username: 'guest_' + Math.random().toString(36).substr(2, 6), isGuest: true };
+  currentUser = { uid: 'guest_' + Math.random().toString(36).substr(2, 6), displayName: 'Guest', isGuest: true };
   enterGame();
 }
 
-async function simpleHash(str) {
-  const data = new TextEncoder().encode(str + 'numbercrunch_salt_2026');
-  const buf = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+auth.onAuthStateChanged(async (user) => {
+  if (user) {
+    const displayName = user.displayName || user.email.split('@')[0];
+    currentUser = { uid: user.uid, displayName, isGuest: false };
+    enterGame();
+  }
+});
 
 function enterGame() {
   document.getElementById('authOverlay').classList.add('hidden');
-  document.getElementById('userBadge').textContent = currentUser.isGuest ? '👤 Guest' : '🏆 ' + currentUser.username;
+  document.getElementById('userBadge').textContent = currentUser.isGuest ? '👤 Guest' : '🏆 ' + currentUser.displayName;
   document.getElementById('statsBtn').style.display = currentUser.isGuest ? 'none' : 'inline-block';
   loadAllUserRecords().then(() => newGame());
 }
 
 function handleLogout() {
+  auth.signOut();
   currentUser = null; userRecords = {};
   document.getElementById('authOverlay').classList.remove('hidden');
-  document.getElementById('authUsername').value = '';
+  document.getElementById('authEmail').value = '';
   document.getElementById('authPassword').value = '';
+  document.getElementById('authDisplayName').value = '';
   document.getElementById('authError').textContent = '';
   stopTimer();
   if (currentLbRef) { currentLbRef.off(); currentLbRef = null; }
@@ -579,7 +689,7 @@ function handleLogout() {
 
 async function loadAllUserRecords() {
   if (!currentUser || currentUser.isGuest) { userRecords = {}; return; }
-  const snap = await db.ref(`records/${currentUser.username}`).once('value');
+  const snap = await db.ref(`records/${currentUser.uid}`).once('value');
   userRecords = snap.val() || {};
 }
 
@@ -745,14 +855,14 @@ function showResult(won) {
 
 // ===== FIREBASE =====
 async function saveTime(targetNum, time) {
-  const u = currentUser.username;
+  const uid = currentUser.uid;
   const t = Math.round(time * 10) / 10;
   const lbRef = db.ref(`leaderboard/${targetNum}`);
   const lbSnap = await lbRef.once('value');
   const ent = lbSnap.val() || {};
-  if (!ent[u] || t < ent[u].time) await lbRef.child(u).set({ time: t, timestamp: Date.now() });
+  if (!ent[uid] || t < ent[uid].time) await lbRef.child(uid).set({ time: t, name: currentUser.displayName, timestamp: Date.now() });
 
-  const uRef = db.ref(`records/${u}/${targetNum}`);
+  const uRef = db.ref(`records/${uid}/${targetNum}`);
   const uSnap = await uRef.once('value');
   const ex = uSnap.val();
   if (!ex || t < ex.bestTime) {
@@ -792,12 +902,12 @@ function renderLbTab() {
   const c = document.getElementById('lbEntries');
   if (currentLbTab === 'global') {
     if (!globalLbData) { c.innerHTML = '<div class="lb-empty">No times yet — be the first!</div>'; return; }
-    const sorted = Object.entries(globalLbData).map(([n, d]) => ({ name: n, time: d.time })).sort((a, b) => a.time - b.time).slice(0, 5);
+    const sorted = Object.entries(globalLbData).map(([uid, d]) => ({ uid, name: d.name || uid, time: d.time })).sort((a, b) => a.time - b.time).slice(0, 5);
     const rc = ['gold','silver','bronze','',''];
     c.innerHTML = sorted.map((e, i) => `
       <div class="lb-entry">
         <span class="lb-rank ${rc[i]}">${i+1}</span>
-        <span class="lb-name">${e.name}${e.name === currentUser?.username ? ' (you)' : ''}</span>
+        <span class="lb-name">${e.name}${e.uid === currentUser?.uid ? ' (you)' : ''}</span>
         <span class="lb-time">${e.time.toFixed(1)}s</span>
       </div>
     `).join('');
@@ -832,6 +942,9 @@ function loadBestTime(targetNum) {
 }
 
 // ===== STATS OVERLAY =====
+function openHowToPlay() { document.getElementById('howToPlayOverlay').classList.add('show'); }
+function closeHowToPlay() { document.getElementById('howToPlayOverlay').classList.remove('show'); }
+
 function openStats() {
   if (currentUser?.isGuest) return;
   renderStatsOverlay();
