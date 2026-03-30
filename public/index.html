@@ -120,6 +120,32 @@
   }
   .btn-small:hover { border-color: var(--muted); color: var(--text); }
 
+  /* ===== START SCREEN ===== */
+  .start-screen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 60vh; text-align: center; gap: 1.5rem;
+  }
+  .start-screen.hidden { display: none; }
+  .start-title {
+    font-size: 2rem; font-weight: 900; letter-spacing: -1px;
+    background: linear-gradient(135deg, var(--accent), var(--blue));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .start-subtitle { color: var(--muted); font-size: 0.95rem; margin-top: -0.75rem; }
+  .start-buttons { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; }
+  .btn-start {
+    padding: 1rem 2rem; border-radius: 12px; font-family: 'Outfit', sans-serif;
+    font-size: 1.05rem; font-weight: 700; cursor: pointer; transition: all 0.15s; border: none;
+  }
+  .btn-start:hover { transform: translateY(-2px); }
+  .btn-start:active { transform: scale(0.97); }
+  .btn-start.primary { background: var(--accent); color: var(--bg); box-shadow: 0 4px 24px rgba(0, 230, 160, 0.2); }
+  .btn-start.primary:hover { box-shadow: 0 6px 30px rgba(0, 230, 160, 0.35); }
+  .btn-start.secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-start.secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+  .game-content.hidden { display: none; }
+
   /* ===== GAME ===== */
   .game-wrap { max-width: 560px; margin: 0 auto; padding: 2rem 1.5rem; }
 
@@ -236,7 +262,7 @@
   .lb-empty { color: var(--muted); font-size: 0.85rem; text-align: center; padding: 1rem; }
 
   /* ===== HOW TO PLAY OVERLAY ===== */
-  #howToPlayOverlay { z-index: 80; background: rgba(10, 10, 18, 0.95); backdrop-filter: blur(12px); }
+  #howToPlayOverlay { z-index: 110; background: rgba(10, 10, 18, 0.95); backdrop-filter: blur(12px); }
 
   .htp-panel {
     background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
@@ -404,6 +430,7 @@
       Sign in with Google
     </button>
     <button class="auth-guest" onclick="playAsGuest()">Play as Guest</button>
+    <button class="auth-guest" onclick="openHowToPlay()" style="margin-top:0; border-color:var(--accent-dim); color:var(--accent);">How to Play</button>
   </div>
 </div>
 
@@ -511,6 +538,16 @@
 </div>
 
 <div class="game-wrap">
+  <div class="start-screen" id="startScreen">
+    <div class="start-title">Ready to Crunch?</div>
+    <div class="start-subtitle">Choose how you want to play</div>
+    <div class="start-buttons">
+      <button class="btn-start primary" onclick="startRandom()">Random Number</button>
+      <button class="btn-start secondary" onclick="startSelect()">Select Number</button>
+    </div>
+  </div>
+
+  <div class="game-content hidden" id="gameContent">
   <div class="target-section">
     <div class="target-label">Target</div>
     <div class="target-number" id="targetNumber">—</div>
@@ -549,6 +586,7 @@
       <div class="lb-empty">No times recorded yet</div>
     </div>
   </div>
+  </div><!-- /game-content -->
 </div>
 
 <!-- Result -->
@@ -596,6 +634,7 @@ let history = [];
 let timerStart = null;
 let timerInterval = null;
 let currentTime = 0;
+let pickingFromStart = false;
 let streak = 0;
 let authMode = 'login';
 let currentLbRef = null;
@@ -672,7 +711,20 @@ function enterGame() {
   document.getElementById('authOverlay').classList.add('hidden');
   document.getElementById('userBadge').textContent = currentUser.isGuest ? '👤 Guest' : '🏆 ' + currentUser.displayName;
   document.getElementById('statsBtn').style.display = currentUser.isGuest ? 'none' : 'inline-block';
-  loadAllUserRecords().then(() => newGame());
+  loadAllUserRecords();
+  document.getElementById('startScreen').classList.remove('hidden');
+  document.getElementById('gameContent').classList.add('hidden');
+}
+
+function startRandom() {
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('gameContent').classList.remove('hidden');
+  newGame();
+}
+
+function startSelect() {
+  pickingFromStart = true;
+  openPicker();
 }
 
 function handleLogout() {
@@ -683,6 +735,8 @@ function handleLogout() {
   document.getElementById('authPassword').value = '';
   document.getElementById('authDisplayName').value = '';
   document.getElementById('authError').textContent = '';
+  document.getElementById('gameContent').classList.add('hidden');
+  document.getElementById('startScreen').classList.add('hidden');
   stopTimer();
   if (currentLbRef) { currentLbRef.off(); currentLbRef = null; }
 }
@@ -714,9 +768,25 @@ function openPicker() {
   renderPickerGrid();
   document.getElementById('pickerOverlay').classList.add('show');
 }
-function closePicker() { document.getElementById('pickerOverlay').classList.remove('show'); }
+function closePicker() {
+  document.getElementById('pickerOverlay').classList.remove('show');
+  if (pickingFromStart) {
+    pickingFromStart = false;
+    // If game hasn't started yet (they closed without picking), show start screen again
+    if (document.getElementById('gameContent').classList.contains('hidden')) {
+      document.getElementById('startScreen').classList.remove('hidden');
+    }
+  }
+}
 
-function pickTarget(num) { closePicker(); newGame(num); }
+function pickTarget(num) {
+  if (pickingFromStart) {
+    pickingFromStart = false;
+    document.getElementById('startScreen').classList.add('hidden');
+    document.getElementById('gameContent').classList.remove('hidden');
+  }
+  closePicker(); newGame(num);
+}
 
 function renderPickerGrid() {
   const grid = document.getElementById('pickerGrid');
