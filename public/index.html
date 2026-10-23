@@ -4,7 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Number Crunch</title>
+<meta name="description" content="Combine 1–5 with +, −, ×, ÷ to hit the target number. A Black Cat Matrix game.">
+<link rel="icon" href="/favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet">
+<script type="module" src="/app.js"></script>
 <style>
   :root {
     --bg: #0a0a12;
@@ -21,6 +24,7 @@
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
+  [hidden] { display: none !important; }
 
   body {
     min-height: 100vh;
@@ -30,6 +34,9 @@
     overflow-x: hidden;
   }
 
+  /* Tiles and grid cells are buttons; this keeps them looking like the plain blocks they were. */
+  .num-tile, .pg-cell, .sg-cell { font: inherit; color: inherit; padding: 0; }
+
   /* ===== SHARED OVERLAY ===== */
   .overlay {
     position: fixed; inset: 0;
@@ -37,7 +44,7 @@
     opacity: 0; visibility: hidden; pointer-events: none;
     transition: opacity 0.35s, visibility 0.35s;
   }
-  .overlay.show { opacity: 1; visibility: visible; pointer-events: auto; }
+  .overlay.show { opacity: 1; visibility: visible; pointer-events: auto; transition: opacity 0.35s, visibility 0s; }
 
   /* ===== AUTH SCREEN ===== */
   .auth-overlay {
@@ -61,20 +68,8 @@
 
   .auth-box .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 2rem; }
 
-  .auth-tabs { display: flex; margin-bottom: 1.5rem; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
-
-  .auth-tab {
-    flex: 1; padding: 0.6rem; font-family: 'Outfit', sans-serif; font-size: 0.85rem;
-    font-weight: 500; background: transparent; color: var(--muted); border: none; cursor: pointer; transition: all 0.2s;
-  }
-  .auth-tab.active { background: var(--accent); color: var(--bg); font-weight: 700; }
-
-  .auth-input {
-    width: 100%; padding: 0.8rem 1rem; background: var(--bg); border: 1px solid var(--border);
-    border-radius: 8px; color: var(--text); font-family: 'Outfit', sans-serif; font-size: 1rem;
-    margin-bottom: 0.75rem; outline: none; transition: border-color 0.2s;
-  }
-  .auth-input:focus { border-color: var(--accent); }
+  .auth-status { color: var(--muted); font-size: 0.9rem; }
+  .auth-lede { color: var(--text); font-size: 0.9rem; margin-bottom: 1rem; }
 
   .auth-submit {
     width: 100%; padding: 0.85rem; background: var(--accent); color: var(--bg); border: none;
@@ -84,6 +79,12 @@
   .auth-submit:hover { opacity: 0.9; }
   .auth-submit:active { transform: scale(0.97); }
 
+  .auth-link {
+    background: none; border: none; color: var(--accent); font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem; cursor: pointer; margin-top: 0.75rem; text-decoration: underline; text-underline-offset: 3px;
+  }
+  .auth-link:hover { color: var(--text); }
+
   .auth-guest {
     background: none; border: 1px solid var(--border); color: var(--muted); width: 100%;
     padding: 0.75rem; border-radius: 8px; font-family: 'Outfit', sans-serif; font-size: 0.9rem;
@@ -91,17 +92,31 @@
   }
   .auth-guest:hover { border-color: var(--muted); color: var(--text); }
 
-  .auth-error { color: var(--red); font-size: 0.8rem; margin-top: 0.5rem; min-height: 1.2em; }
+  .auth-error { color: var(--red); font-size: 0.8rem; margin-bottom: 0.75rem; }
+  .auth-error:empty { display: none; }
+  .auth-foot { color: var(--muted); font-size: 0.75rem; line-height: 1.5; margin-top: 1.25rem; }
+
+  /* ===== ACCOUNT WINDOW DIALOG ===== */
+  .account-dialog {
+    margin: auto; width: min(26rem, calc(100% - 2rem)); padding: 1.5rem;
+    background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 16px;
+    font-family: 'Outfit', sans-serif;
+  }
+  .account-dialog::backdrop { background: rgba(10, 10, 18, 0.85); }
+  .account-dialog h2 { font-size: 1.2rem; font-weight: 700; }
+  .account-dialog p { color: var(--muted); font-size: 0.9rem; line-height: 1.5; margin: 0.75rem 0 1.25rem; }
+  .account-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+  .account-dialog a { display: inline-block; margin-top: 1rem; color: var(--accent); font-size: 0.85rem; }
 
   /* ===== TOP BAR ===== */
   .topbar {
     display: flex; align-items: center; justify-content: space-between;
     padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
   }
-  .topbar-left { display: flex; align-items: center; gap: 0.75rem; }
+  .topbar-left { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
 
   .logo {
-    font-weight: 900; font-size: 1.2rem; letter-spacing: -0.5px;
+    font-weight: 900; font-size: 1.2rem; letter-spacing: -0.5px; white-space: nowrap; flex-shrink: 0;
     background: linear-gradient(135deg, var(--accent), var(--blue));
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   }
@@ -109,7 +124,10 @@
   .user-badge {
     font-size: 0.75rem; color: var(--muted); background: var(--surface2);
     padding: 0.25rem 0.6rem; border-radius: 20px; border: 1px solid var(--border);
+    min-width: 0; max-width: 16rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  a.user-badge { text-decoration: none; transition: border-color 0.2s, color 0.2s; }
+  a.user-badge:hover { border-color: var(--muted); color: var(--text); }
 
   .topbar-right { display: flex; gap: 0.5rem; align-items: center; }
 
@@ -202,6 +220,7 @@
     color: var(--muted); margin-bottom: 1.5rem; min-height: 2rem; transition: color 0.2s;
   }
   .expression.ready { color: var(--text); }
+  .expression.error { color: var(--red); }
 
   .action-row { display: flex; gap: 0.75rem; justify-content: center; margin-bottom: 1rem; }
 
@@ -228,7 +247,7 @@
     display: flex; align-items: center; justify-content: center;
     opacity: 0; visibility: hidden; transition: opacity 0.4s, visibility 0.4s;
   }
-  .result-overlay.show { opacity: 1; visibility: visible; }
+  .result-overlay.show { opacity: 1; visibility: visible; transition: opacity 0.4s, visibility 0s; }
 
   .result-box { text-align: center; padding: 3rem; }
   .result-emoji { font-size: 4rem; margin-bottom: 1rem; }
@@ -236,16 +255,26 @@
   .result-title.win { color: var(--accent); }
   .result-title.lose { color: var(--red); }
   .result-detail { color: var(--muted); font-size: 1rem; margin-bottom: 0.3rem; }
-  .result-time { font-family: 'DM Mono', monospace; font-size: 1.2rem; color: var(--gold); margin-bottom: 2rem; }
+  .result-time { font-family: 'DM Mono', monospace; font-size: 1.2rem; color: var(--gold); margin-bottom: 0.4rem; }
+  .result-note { color: var(--muted); font-size: 0.9rem; min-height: 1.3em; margin-bottom: 2rem; }
+  .result-note.best { color: var(--accent); font-weight: 700; }
   .result-buttons { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
 
   .btn-result {
     padding: 0.8rem 1.8rem; border-radius: 10px; font-family: 'Outfit', sans-serif;
-    font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: all 0.15s; border: none;
+    font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: all 0.15s, visibility 0s; border: none;
   }
   .btn-result:hover { transform: translateY(-1px); }
   .btn-result.primary { background: var(--accent); color: var(--bg); }
   .btn-result.secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+
+  /* Two-way tab switch (leaderboard and stats grid) */
+  .seg { display: flex; margin-bottom: 0.75rem; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+  .seg-btn {
+    flex: 1; padding: 0.45rem; font-family: 'Outfit', sans-serif; font-size: 0.75rem; font-weight: 500;
+    background: transparent; color: var(--muted); border: none; cursor: pointer; transition: all 0.2s;
+  }
+  .seg-btn[aria-pressed="true"] { background: var(--accent); color: var(--bg); }
 
   /* Leaderboard */
   .leaderboard-section { margin-top: 2.5rem; border-top: 1px solid var(--border); padding-top: 1.5rem; }
@@ -253,12 +282,14 @@
   .lb-title { font-size: 0.8rem; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; }
   .lb-entries { display: flex; flex-direction: column; gap: 0.4rem; }
   .lb-entry { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; background: var(--surface); border-radius: 8px; font-size: 0.85rem; }
-  .lb-rank { color: var(--muted); width: 24px; font-weight: 700; }
+  .lb-rank { color: var(--muted); width: 24px; font-weight: 700; flex-shrink: 0; }
   .lb-rank.gold { color: var(--gold); }
   .lb-rank.silver { color: #c0c0c0; }
   .lb-rank.bronze { color: #cd7f32; }
-  .lb-name { flex: 1; margin-left: 0.5rem; }
-  .lb-time { font-family: 'DM Mono', monospace; color: var(--accent); font-size: 0.8rem; }
+  .lb-rank.blue { color: var(--blue); }
+  .lb-name { flex: 1; margin-left: 0.5rem; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lb-time { font-family: 'DM Mono', monospace; color: var(--accent); font-size: 0.8rem; margin-left: 0.5rem; }
+  .lb-time.plain { color: var(--text); }
   .lb-empty { color: var(--muted); font-size: 0.85rem; text-align: center; padding: 1rem; }
 
   /* ===== HOW TO PLAY OVERLAY ===== */
@@ -318,7 +349,7 @@
   .panel-close {
     width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
     background: transparent; color: var(--muted); font-size: 1.1rem;
-    cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s, visibility 0s;
   }
   .panel-close:hover { border-color: var(--muted); color: var(--text); }
 
@@ -355,6 +386,7 @@
   .sg-cell.solved .sg-check { color: var(--accent); font-size: 0.55rem; margin-top: 1px; }
   .sg-cell.solved .sg-num { color: var(--accent); }
   .sg-cell .sg-num { color: var(--muted); }
+  .sg-cell .sg-name { font-size: 0.45rem; color: var(--blue); margin-top: 1px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sg-cell .sg-time { font-size: 0.5rem; color: var(--gold); margin-top: 0; line-height: 1; }
   .sg-cell.unreachable { opacity: 0.15; pointer-events: none; }
 
@@ -389,9 +421,17 @@
   #confetti { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 90; }
 
   /* Responsive */
+  @media (max-width: 520px) {
+    .topbar { flex-wrap: wrap; gap: 0.6rem; padding: 0.75rem 1rem; }
+    .topbar-left { flex: 1 1 100%; }
+    .topbar-right { flex-wrap: wrap; }
+  }
+
   @media (max-width: 480px) {
+    .auth-box { padding: 2.5rem 1.5rem; }
     .target-number { font-size: 3.5rem; }
-    .num-tile { width: 64px; height: 64px; font-size: 1.2rem; }
+    .numbers-section { gap: 0.5rem; }
+    .num-tile { width: 58px; height: 58px; font-size: 1.2rem; }
     .op-btn { width: 48px; height: 48px; font-size: 1.2rem; }
     .game-wrap { padding: 1.5rem 1rem; }
     .stats-grid, .picker-grid { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 4px; }
@@ -409,37 +449,42 @@
   <div class="auth-box">
     <h1>Number Crunch</h1>
     <p class="subtitle">Use +, −, ×, ÷ to hit the target</p>
-    <div class="auth-tabs">
-      <button class="auth-tab active" onclick="switchAuthTab('login')">Log In</button>
-      <button class="auth-tab" onclick="switchAuthTab('signup')">Sign Up</button>
+    <p class="auth-status" id="authStatus" role="status">Checking your account…</p>
+    <div id="authOptions" hidden>
+      <p class="auth-lede">One Black Cat Matrix account works across our games.</p>
+      <p class="auth-error" id="authError" role="alert"></p>
+      <button type="button" class="auth-submit" data-action="sign-in">Sign in with Black Cat Matrix</button>
+      <button type="button" class="auth-link" data-action="register">Create an account</button>
+      <div style="display:flex; align-items:center; gap:1rem; margin:1.25rem 0 0.75rem;">
+        <div style="flex:1; height:1px; background:var(--border);"></div>
+        <span style="color:var(--muted); font-size:0.8rem;">or</span>
+        <div style="flex:1; height:1px; background:var(--border);"></div>
+      </div>
+      <button type="button" class="auth-guest" data-action="guest" style="margin-top:0;">Play as Guest</button>
+      <button type="button" class="auth-guest" data-action="how-to-play" style="border-color:var(--accent-dim); color:var(--accent);">How to Play</button>
+      <p class="auth-foot">Played before? Sign in with the same email and your old times come with you.</p>
     </div>
-    <div id="authForm">
-      <input class="auth-input" type="email" id="authEmail" placeholder="Email" autocomplete="email">
-      <input class="auth-input" type="password" id="authPassword" placeholder="Password">
-      <input class="auth-input" type="text" id="authDisplayName" placeholder="Display Name" autocomplete="off" style="display:none;">
-      <button class="auth-submit" id="authSubmit" onclick="handleAuth()">Log In</button>
-      <p class="auth-error" id="authError"></p>
-    </div>
-    <div style="display:flex; align-items:center; gap:1rem; margin:1.25rem 0 0.75rem;">
-      <div style="flex:1; height:1px; background:var(--border);"></div>
-      <span style="color:var(--muted); font-size:0.8rem;">or</span>
-      <div style="flex:1; height:1px; background:var(--border);"></div>
-    </div>
-    <button class="auth-guest" onclick="handleGoogleSignIn()" style="margin-top:0; display:flex; align-items:center; justify-content:center; gap:0.5rem;">
-      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#34A853" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#FBBC05" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-      Sign in with Google
-    </button>
-    <button class="auth-guest" onclick="playAsGuest()">Play as Guest</button>
-    <button class="auth-guest" onclick="openHowToPlay()" style="margin-top:0; border-color:var(--accent-dim); color:var(--accent);">How to Play</button>
   </div>
 </div>
 
+<!-- ACCOUNT WINDOW -->
+<dialog class="account-dialog" id="accountDialog" aria-labelledby="accountTitle">
+  <h2 id="accountTitle">Black Cat Matrix</h2>
+  <p id="accountMessage" role="status"></p>
+  <div class="account-actions">
+    <button type="button" class="btn-result primary" id="accountRetry" data-action="account-retry">Reopen sign-in</button>
+    <button type="button" class="btn-result secondary" data-action="account-cancel">Cancel</button>
+  </div>
+  <a id="accountFallback" href="/api/auth/login?next=%2F" hidden>Continue in this tab</a>
+</dialog>
+<form id="logoutForm" method="post" action="/api/auth/logout" hidden></form>
+
 <!-- HOW TO PLAY OVERLAY -->
-<div class="overlay" id="howToPlayOverlay">
+<div class="overlay" id="howToPlayOverlay" role="dialog" aria-modal="true" aria-labelledby="htpTitle">
   <div class="htp-panel">
     <div class="htp-header">
-      <h2>How to Play</h2>
-      <button class="panel-close" onclick="closeHowToPlay()">&times;</button>
+      <h2 id="htpTitle">How to Play</h2>
+      <button type="button" class="panel-close" data-action="close-overlay" aria-label="Close">&times;</button>
     </div>
     <div class="htp-body">
       <h3>Goal</h3>
@@ -455,24 +500,24 @@
         Starting numbers: <span>1, 2, 3, 4, 5</span><br><br>
         Step 1 &mdash; 5 + 4 = <span>9</span> &rarr; left with 1, 2, 3, <span>9</span><br>
         Step 2 &mdash; 9 + 3 = <span>12</span> &rarr; left with 1, 2, <span>12</span><br>
-        Step 3 &mdash; 2 &minus; 1 = <span>1</span> &rarr; left with <span>1</span>, 12<br>
+        Step 3 &mdash; 2 &minus; 1 = <span>1</span> &rarr; left with 12, <span>1</span><br>
         Step 4 &mdash; 12 &times; 1 = <span>12</span> &rarr; that's the target!
       </div>
 
       <h3>Controls</h3>
       <p>Tap a <strong>number</strong>, then an <strong>operator</strong>, then a <strong>second number</strong> and hit <strong>Compute</strong>. Use <strong>Undo</strong> (or Ctrl+Z) to take back a step.</p>
 
-      <div class="htp-tip">Tip: You can use keyboard shortcuts &mdash; press +, -, *, / to select an operator, Enter to compute, and Ctrl+Z to undo.</div>
+      <div class="htp-tip">Tip: Keyboard works too: press 1–5 to pick numbers, + − * / for an operator, Enter to compute and Ctrl+Z to undo.</div>
     </div>
   </div>
 </div>
 
 <!-- STATS OVERLAY -->
-<div class="overlay" id="statsOverlay">
+<div class="overlay" id="statsOverlay" role="dialog" aria-modal="true" aria-labelledby="statsTitle">
   <div class="stats-panel">
     <div class="stats-header">
-      <h2>📊 My Stats</h2>
-      <button class="panel-close" onclick="closeStats()">✕</button>
+      <h2 id="statsTitle">📊 My Stats</h2>
+      <button type="button" class="panel-close" data-action="close-overlay" aria-label="Close">✕</button>
     </div>
     <div class="stats-summary">
       <div class="summary-card">
@@ -501,9 +546,9 @@
       </div>
     </div>
     <div class="stats-grid-wrap">
-      <div style="display:flex; gap:0; margin-bottom:0.75rem; border-radius:6px; overflow:hidden; border:1px solid var(--border);">
-        <button class="sg-tab" id="sgTabPersonal" onclick="switchStatsGridTab('personal')" style="flex:1; padding:0.45rem; font-family:'Outfit',sans-serif; font-size:0.75rem; font-weight:500; background:var(--accent); color:var(--bg); border:none; cursor:pointer; transition:all 0.2s;">My Best Times</button>
-        <button class="sg-tab" id="sgTabGlobal" onclick="switchStatsGridTab('global')" style="flex:1; padding:0.45rem; font-family:'Outfit',sans-serif; font-size:0.75rem; font-weight:500; background:transparent; color:var(--muted); border:none; cursor:pointer; transition:all 0.2s;">Global Best Times</button>
+      <div class="seg">
+        <button type="button" class="seg-btn" data-action="stats-tab" data-tab="personal" aria-pressed="true">My Best Times</button>
+        <button type="button" class="seg-btn" data-action="stats-tab" data-tab="global" aria-pressed="false">Global Best Times</button>
       </div>
       <div class="stats-grid-label" id="statsGridLabel">Tap a number to play it</div>
       <div class="stats-grid" id="statsGrid"></div>
@@ -512,11 +557,11 @@
 </div>
 
 <!-- PICKER OVERLAY -->
-<div class="overlay" id="pickerOverlay">
+<div class="overlay" id="pickerOverlay" role="dialog" aria-modal="true" aria-labelledby="pickerTitle">
   <div class="picker-panel">
     <div class="picker-header">
-      <h2>🎯 Pick a Number</h2>
-      <button class="panel-close" onclick="closePicker()">✕</button>
+      <h2 id="pickerTitle">🎯 Pick a Number</h2>
+      <button type="button" class="panel-close" data-action="close-overlay" aria-label="Close">✕</button>
     </div>
     <div class="picker-grid-wrap">
       <div class="picker-grid" id="pickerGrid"></div>
@@ -528,12 +573,14 @@
 <div class="topbar">
   <div class="topbar-left">
     <span class="logo">Number Crunch</span>
-    <span class="user-badge" id="userBadge">Guest</span>
+    <span class="user-badge" id="guestBadge">👤 Guest</span>
+    <a class="user-badge" id="userBadge" target="_blank" rel="noopener" title="Account settings" hidden></a>
   </div>
   <div class="topbar-right">
-    <button class="btn-small" onclick="openHowToPlay()">How to Play</button>
-    <button class="btn-small" id="statsBtn" onclick="openStats()">My Stats</button>
-    <button class="btn-small" onclick="handleLogout()">Sign Out</button>
+    <button type="button" class="btn-small" data-action="how-to-play">How to Play</button>
+    <button type="button" class="btn-small" id="signInBtn" data-action="sign-in">Sign In</button>
+    <button type="button" class="btn-small" id="statsBtn" data-action="stats" hidden>My Stats</button>
+    <button type="button" class="btn-small" id="signOutBtn" data-action="sign-out" hidden>Sign Out</button>
   </div>
 </div>
 
@@ -542,8 +589,8 @@
     <div class="start-title">Ready to Crunch?</div>
     <div class="start-subtitle">Choose how you want to play</div>
     <div class="start-buttons">
-      <button class="btn-start primary" onclick="startRandom()">Random Number</button>
-      <button class="btn-start secondary" onclick="startSelect()">Select Number</button>
+      <button type="button" class="btn-start primary" data-action="start-random">Random Number</button>
+      <button type="button" class="btn-start secondary" data-action="choose">Select Number</button>
     </div>
   </div>
 
@@ -554,8 +601,8 @@
     <div class="timer" id="timer">0.0s</div>
     <div class="best-time" id="bestTime"></div>
     <div class="target-nav">
-      <button class="btn-target-nav" onclick="skipNumber()">Skip →</button>
-      <button class="btn-target-nav" onclick="openPicker()">Choose #</button>
+      <button type="button" class="btn-target-nav" data-action="skip">Skip →</button>
+      <button type="button" class="btn-target-nav" data-action="choose">Choose #</button>
     </div>
   </div>
 
@@ -563,598 +610,49 @@
   <div class="expression" id="expression">&nbsp;</div>
 
   <div class="operator-section">
-    <button class="op-btn" data-op="+" onclick="selectOp(this)">+</button>
-    <button class="op-btn" data-op="-" onclick="selectOp(this)">−</button>
-    <button class="op-btn" data-op="*" onclick="selectOp(this)">×</button>
-    <button class="op-btn" data-op="/" onclick="selectOp(this)">÷</button>
+    <button type="button" class="op-btn" data-action="op" data-op="+" aria-pressed="false">+</button>
+    <button type="button" class="op-btn" data-action="op" data-op="-" aria-pressed="false">−</button>
+    <button type="button" class="op-btn" data-action="op" data-op="*" aria-pressed="false">×</button>
+    <button type="button" class="op-btn" data-action="op" data-op="/" aria-pressed="false">÷</button>
   </div>
 
   <div class="action-row">
-    <button class="btn-undo" id="undoBtn" onclick="undoLast()" disabled>Undo</button>
-    <button class="btn-compute" id="computeBtn" onclick="compute()" disabled>Compute</button>
+    <button type="button" class="btn-undo" id="undoBtn" data-action="undo" disabled>Undo</button>
+    <button type="button" class="btn-compute" id="computeBtn" data-action="compute" disabled>Compute</button>
   </div>
 
   <div class="leaderboard-section">
     <div class="lb-header">
       <span class="lb-title" id="lbTitle">Best Times — Target: —</span>
     </div>
-    <div class="lb-tabs" style="display:flex; gap:0; margin-bottom:0.75rem; border-radius:6px; overflow:hidden; border:1px solid var(--border);">
-      <button class="lb-tab active" id="lbTabGlobal" onclick="switchLbTab('global')" style="flex:1; padding:0.45rem; font-family:'Outfit',sans-serif; font-size:0.75rem; font-weight:500; background:var(--accent); color:var(--bg); border:none; cursor:pointer; transition:all 0.2s;">Global Best</button>
-      <button class="lb-tab" id="lbTabPersonal" onclick="switchLbTab('personal')" style="flex:1; padding:0.45rem; font-family:'Outfit',sans-serif; font-size:0.75rem; font-weight:500; background:transparent; color:var(--muted); border:none; cursor:pointer; transition:all 0.2s;">My Best</button>
+    <div class="seg">
+      <button type="button" class="seg-btn" data-action="lb-tab" data-tab="global" aria-pressed="true">Global Best</button>
+      <button type="button" class="seg-btn" data-action="lb-tab" data-tab="personal" aria-pressed="false">My Best</button>
     </div>
     <div class="lb-entries" id="lbEntries">
-      <div class="lb-empty">No times recorded yet</div>
+      <div class="lb-empty">Loading…</div>
     </div>
   </div>
   </div><!-- /game-content -->
 </div>
 
 <!-- Result -->
-<div class="result-overlay" id="resultOverlay">
+<div class="result-overlay" id="resultOverlay" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
   <div class="result-box">
     <div class="result-emoji" id="resultEmoji">🎉</div>
     <div class="result-title" id="resultTitle">You got it!</div>
     <div class="result-detail" id="resultDetail"></div>
     <div class="result-time" id="resultTime"></div>
-    <div class="result-buttons" id="resultButtons"></div>
+    <div class="result-note" id="resultNote" role="status"></div>
+    <div class="result-buttons">
+      <button type="button" class="btn-result secondary" data-action="retry">Try Again</button>
+      <button type="button" class="btn-result primary" id="resultPrimary" data-action="new-random">New Random Number</button>
+      <button type="button" class="btn-result secondary" data-action="result-select">Select Number</button>
+    </div>
   </div>
 </div>
 
 <canvas id="confetti"></canvas>
 
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
-
-<script>
-firebase.initializeApp({
-  apiKey: "AIzaSyBnzHFCEuC2fR1SKHSGhGkUkeFdGpEpVJ0",
-  authDomain: "overlord-d9651.firebaseapp.com",
-  databaseURL: "https://overlord-d9651-default-rtdb.firebaseio.com",
-  projectId: "overlord-d9651",
-  storageBucket: "overlord-d9651.firebasestorage.app",
-  messagingSenderId: "685334343246",
-  appId: "1:685334343246:web:a9c3f511208af171d91d1f"
-});
-const db = firebase.database();
-const auth = firebase.auth();
-const googleProvider = new firebase.auth.GoogleAuthProvider();
-
-const UNREACHABLE = new Set([76, 79, 86, 92, 94, 97, 98]);
-const ALL_TARGETS = [];
-for (let i = 0; i <= 100; i++) { if (!UNREACHABLE.has(i)) ALL_TARGETS.push(i); }
-
-let currentUser = null;
-let userRecords = {};
-let target = null;
-let numbers = [];
-let selectedNums = [];
-let selectedOp = null;
-let history = [];
-let timerStart = null;
-let timerInterval = null;
-let currentTime = 0;
-let pickingFromStart = false;
-let streak = 0;
-let authMode = 'login';
-let currentLbRef = null;
-
-// ===== AUTH =====
-function switchAuthTab(mode) {
-  authMode = mode;
-  document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
-  document.querySelector(`.auth-tab:nth-child(${mode === 'login' ? 1 : 2})`).classList.add('active');
-  document.getElementById('authSubmit').textContent = mode === 'login' ? 'Log In' : 'Create Account';
-  document.getElementById('authDisplayName').style.display = mode === 'signup' ? 'block' : 'none';
-  document.getElementById('authError').textContent = '';
-}
-
-document.querySelectorAll('.auth-input').forEach(input => {
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleAuth(); });
-});
-
-async function handleAuth() {
-  const email = document.getElementById('authEmail').value.trim();
-  const password = document.getElementById('authPassword').value;
-  const err = document.getElementById('authError');
-  if (!email || !password) { err.textContent = 'Please fill in all fields.'; return; }
-  try {
-    if (authMode === 'signup') {
-      const displayName = document.getElementById('authDisplayName').value.trim();
-      if (!displayName) { err.textContent = 'Please enter a display name.'; return; }
-      const cred = await auth.createUserWithEmailAndPassword(email, password);
-      await cred.user.updateProfile({ displayName });
-      await db.ref('users/' + cred.user.uid).set({ displayName, created: Date.now() });
-    } else {
-      await auth.signInWithEmailAndPassword(email, password);
-    }
-  } catch (e) {
-    const msgs = {
-      'auth/email-already-in-use': 'Email already in use.',
-      'auth/invalid-email': 'Invalid email address.',
-      'auth/weak-password': 'Password must be at least 6 characters.',
-      'auth/user-not-found': 'No account found with this email.',
-      'auth/wrong-password': 'Incorrect password.',
-      'auth/invalid-credential': 'Invalid email or password.',
-    };
-    err.textContent = msgs[e.code] || e.message;
-  }
-}
-
-async function handleGoogleSignIn() {
-  try {
-    const result = await auth.signInWithPopup(googleProvider);
-    if (result.additionalUserInfo?.isNewUser) {
-      await db.ref('users/' + result.user.uid).set({ displayName: result.user.displayName, created: Date.now() });
-    }
-  } catch (e) {
-    if (e.code !== 'auth/popup-closed-by-user') {
-      document.getElementById('authError').textContent = e.message;
-    }
-  }
-}
-
-function playAsGuest() {
-  currentUser = { uid: 'guest_' + Math.random().toString(36).substr(2, 6), displayName: 'Guest', isGuest: true };
-  enterGame();
-}
-
-auth.onAuthStateChanged(async (user) => {
-  if (user) {
-    const displayName = user.displayName || user.email.split('@')[0];
-    currentUser = { uid: user.uid, displayName, isGuest: false };
-    enterGame();
-  }
-});
-
-function enterGame() {
-  document.getElementById('authOverlay').classList.add('hidden');
-  document.getElementById('userBadge').textContent = currentUser.isGuest ? '👤 Guest' : '🏆 ' + currentUser.displayName;
-  document.getElementById('statsBtn').style.display = currentUser.isGuest ? 'none' : 'inline-block';
-  loadAllUserRecords();
-  document.getElementById('startScreen').classList.remove('hidden');
-  document.getElementById('gameContent').classList.add('hidden');
-}
-
-function startRandom() {
-  document.getElementById('startScreen').classList.add('hidden');
-  document.getElementById('gameContent').classList.remove('hidden');
-  newGame();
-}
-
-function startSelect() {
-  pickingFromStart = true;
-  openPicker();
-}
-
-function handleLogout() {
-  auth.signOut();
-  currentUser = null; userRecords = {};
-  document.getElementById('authOverlay').classList.remove('hidden');
-  document.getElementById('authEmail').value = '';
-  document.getElementById('authPassword').value = '';
-  document.getElementById('authDisplayName').value = '';
-  document.getElementById('authError').textContent = '';
-  document.getElementById('gameContent').classList.add('hidden');
-  document.getElementById('startScreen').classList.add('hidden');
-  stopTimer();
-  if (currentLbRef) { currentLbRef.off(); currentLbRef = null; }
-}
-
-async function loadAllUserRecords() {
-  if (!currentUser || currentUser.isGuest) { userRecords = {}; return; }
-  const snap = await db.ref(`records/${currentUser.uid}`).once('value');
-  userRecords = snap.val() || {};
-}
-
-// ===== GAME =====
-function newGame(forceTarget = null) {
-  target = forceTarget !== null ? forceTarget : ALL_TARGETS[Math.floor(Math.random() * ALL_TARGETS.length)];
-  numbers = [1, 2, 3, 4, 5];
-  selectedNums = []; selectedOp = null; history = [];
-  document.getElementById('resultOverlay').classList.remove('show');
-  document.getElementById('targetNumber').textContent = target;
-  document.getElementById('lbTitle').textContent = `Best Times — Target: ${target}`;
-  document.querySelectorAll('.op-btn').forEach(b => b.classList.remove('selected'));
-  renderNumbers(); renderExpression(); updateButtons();
-  startTimer(); loadLeaderboard(target); loadBestTime(target);
-  switchLbTab('global');
-}
-
-function retryGame() { newGame(target); }
-function skipNumber() { newGame(); }
-
-function openPicker() {
-  renderPickerGrid();
-  document.getElementById('pickerOverlay').classList.add('show');
-}
-function closePicker() {
-  document.getElementById('pickerOverlay').classList.remove('show');
-  if (pickingFromStart) {
-    pickingFromStart = false;
-    // If game hasn't started yet (they closed without picking), show start screen again
-    if (document.getElementById('gameContent').classList.contains('hidden')) {
-      document.getElementById('startScreen').classList.remove('hidden');
-    }
-  }
-}
-
-function pickTarget(num) {
-  if (pickingFromStart) {
-    pickingFromStart = false;
-    document.getElementById('startScreen').classList.add('hidden');
-    document.getElementById('gameContent').classList.remove('hidden');
-  }
-  closePicker(); newGame(num);
-}
-
-function renderPickerGrid() {
-  const grid = document.getElementById('pickerGrid');
-  grid.innerHTML = '';
-  for (let i = 0; i <= 100; i++) {
-    const cell = document.createElement('div');
-    cell.className = 'pg-cell';
-    cell.textContent = i;
-    if (UNREACHABLE.has(i)) { cell.classList.add('unreachable'); }
-    else { cell.onclick = () => pickTarget(i); }
-    grid.appendChild(cell);
-  }
-}
-
-function renderNumbers() {
-  const s = document.getElementById('numbersSection'); s.innerHTML = '';
-  numbers.forEach((n, i) => {
-    const t = document.createElement('div');
-    t.className = 'num-tile';
-    if (selectedNums.includes(i)) t.classList.add('selected');
-    t.textContent = formatNum(n);
-    t.onclick = () => selectNumber(i);
-    s.appendChild(t);
-  });
-}
-
-function formatNum(n) { return Number.isInteger(n) ? n.toString() : parseFloat(n.toFixed(4)).toString(); }
-
-function selectNumber(i) {
-  const pos = selectedNums.indexOf(i);
-  if (pos !== -1) selectedNums.splice(pos, 1);
-  else if (selectedNums.length < 2) selectedNums.push(i);
-  else { selectedNums.shift(); selectedNums.push(i); }
-  renderNumbers(); renderExpression(); updateButtons();
-}
-
-function selectOp(btn) {
-  document.querySelectorAll('.op-btn').forEach(b => b.classList.remove('selected'));
-  const op = btn.dataset.op;
-  if (selectedOp === op) selectedOp = null;
-  else { selectedOp = op; btn.classList.add('selected'); }
-  renderExpression(); updateButtons();
-}
-
-function renderExpression() {
-  const el = document.getElementById('expression');
-  if (!selectedNums.length && !selectedOp) { el.innerHTML = '&nbsp;'; el.classList.remove('ready'); return; }
-  const sy = { '+':'+', '-':'−', '*':'×', '/':'÷' };
-  const a = selectedNums.length > 0 ? formatNum(numbers[selectedNums[0]]) : '?';
-  const op = selectedOp ? sy[selectedOp] : '?';
-  const b = selectedNums.length > 1 ? formatNum(numbers[selectedNums[1]]) : '?';
-  el.textContent = `${a} ${op} ${b}`;
-  el.classList.toggle('ready', selectedNums.length === 2 && !!selectedOp);
-}
-
-function updateButtons() {
-  document.getElementById('computeBtn').disabled = !(selectedNums.length === 2 && selectedOp);
-  document.getElementById('undoBtn').disabled = !history.length;
-}
-
-function compute() {
-  if (selectedNums.length !== 2 || !selectedOp) return;
-  const a = numbers[selectedNums[0]], b = numbers[selectedNums[1]];
-  let result;
-  switch (selectedOp) {
-    case '+': result = a + b; break;
-    case '-': result = a - b; break;
-    case '*': result = a * b; break;
-    case '/': if (b === 0) { shakeExpression(); return; } result = a / b; break;
-  }
-  history.push({ numbers: [...numbers], selectedNums: [...selectedNums], selectedOp });
-  [...selectedNums].sort((x, y) => y - x).forEach(i => numbers.splice(i, 1));
-  numbers.push(result);
-  selectedNums = []; selectedOp = null;
-  document.querySelectorAll('.op-btn').forEach(b => b.classList.remove('selected'));
-  renderNumbers(); renderExpression(); updateButtons();
-  const tiles = document.querySelectorAll('.num-tile');
-  if (tiles.length) tiles[tiles.length - 1].classList.add('result-new');
-  if (numbers.length === 1) {
-    stopTimer();
-    const f = numbers[0];
-    const won = Math.abs(f - Math.round(f)) < 1e-9 && Math.round(f) === target;
-    setTimeout(() => showResult(won), 400);
-  }
-}
-
-function shakeExpression() {
-  const el = document.getElementById('expression');
-  el.style.color = 'var(--red)'; el.textContent = "Can't divide by zero!";
-  setTimeout(() => { renderExpression(); el.style.color = ''; }, 1200);
-}
-
-function undoLast() {
-  if (!history.length) return;
-  const prev = history.pop();
-  numbers = prev.numbers; selectedNums = []; selectedOp = null;
-  document.querySelectorAll('.op-btn').forEach(b => b.classList.remove('selected'));
-  renderNumbers(); renderExpression(); updateButtons();
-}
-
-// ===== TIMER =====
-function startTimer() {
-  stopTimer(); timerStart = Date.now(); currentTime = 0;
-  const el = document.getElementById('timer');
-  timerInterval = setInterval(() => { currentTime = (Date.now() - timerStart) / 1000; el.textContent = currentTime.toFixed(1) + 's'; }, 100);
-}
-function stopTimer() { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } }
-
-// ===== RESULTS =====
-function showResult(won) {
-  const o = document.getElementById('resultOverlay');
-  if (won) {
-    document.getElementById('resultEmoji').textContent = '🎉';
-    document.getElementById('resultTitle').textContent = 'You got it!';
-    document.getElementById('resultTitle').className = 'result-title win';
-    document.getElementById('resultDetail').textContent = `Target: ${target}`;
-    document.getElementById('resultTime').textContent = `⏱ ${currentTime.toFixed(1)}s`;
-    streak++;
-    if (!currentUser.isGuest) saveTime(target, currentTime);
-    fanfare();
-  } else {
-    document.getElementById('resultEmoji').textContent = '😬';
-    document.getElementById('resultTitle').textContent = 'Not quite!';
-    document.getElementById('resultTitle').className = 'result-title lose';
-    document.getElementById('resultDetail').textContent = `You got ${formatNum(numbers[0])}, needed ${target}`;
-    document.getElementById('resultTime').textContent = '';
-    streak = 0;
-  }
-  document.getElementById('resultButtons').innerHTML = `
-    <button class="btn-result secondary" onclick="retryGame()">Try Again</button>
-    <button class="btn-result primary" onclick="newGame()">New Random Number</button>
-    <button class="btn-result secondary" onclick="document.getElementById('resultOverlay').classList.remove('show'); openPicker();">Select Number</button>
-  `;
-  o.classList.add('show');
-}
-
-// ===== FIREBASE =====
-async function saveTime(targetNum, time) {
-  const uid = currentUser.uid;
-  const t = Math.round(time * 10) / 10;
-  const lbRef = db.ref(`leaderboard/${targetNum}`);
-  const lbSnap = await lbRef.once('value');
-  const ent = lbSnap.val() || {};
-  if (!ent[uid] || t < ent[uid].time) await lbRef.child(uid).set({ time: t, name: currentUser.displayName, timestamp: Date.now() });
-
-  const uRef = db.ref(`records/${uid}/${targetNum}`);
-  const uSnap = await uRef.once('value');
-  const ex = uSnap.val();
-  if (!ex || t < ex.bestTime) {
-    await uRef.set({ bestTime: t, solveCount: (ex?.solveCount || 0) + 1, lastSolved: Date.now() });
-    userRecords[targetNum] = { bestTime: t, solveCount: (ex?.solveCount || 0) + 1 };
-  } else {
-    await uRef.update({ solveCount: ex.solveCount + 1, lastSolved: Date.now() });
-    userRecords[targetNum] = { ...ex, solveCount: ex.solveCount + 1 };
-  }
-  loadLeaderboard(targetNum); loadBestTime(targetNum);
-}
-
-function loadLeaderboard(targetNum) {
-  if (currentLbRef) currentLbRef.off();
-  const ref = db.ref(`leaderboard/${targetNum}`);
-  currentLbRef = ref;
-  ref.orderByChild('time').limitToFirst(5).on('value', (snap) => {
-    globalLbData = snap.val();
-    if (currentLbTab === 'global') renderLbTab();
-  });
-  renderLbTab();
-}
-
-let currentLbTab = 'global';
-let globalLbData = null;
-
-function switchLbTab(tab) {
-  currentLbTab = tab;
-  document.getElementById('lbTabGlobal').style.background = tab === 'global' ? 'var(--accent)' : 'transparent';
-  document.getElementById('lbTabGlobal').style.color = tab === 'global' ? 'var(--bg)' : 'var(--muted)';
-  document.getElementById('lbTabPersonal').style.background = tab === 'personal' ? 'var(--accent)' : 'transparent';
-  document.getElementById('lbTabPersonal').style.color = tab === 'personal' ? 'var(--bg)' : 'var(--muted)';
-  renderLbTab();
-}
-
-function renderLbTab() {
-  const c = document.getElementById('lbEntries');
-  if (currentLbTab === 'global') {
-    if (!globalLbData) { c.innerHTML = '<div class="lb-empty">No times yet — be the first!</div>'; return; }
-    const sorted = Object.entries(globalLbData).map(([uid, d]) => ({ uid, name: d.name || uid, time: d.time })).sort((a, b) => a.time - b.time).slice(0, 5);
-    const rc = ['gold','silver','bronze','',''];
-    c.innerHTML = sorted.map((e, i) => `
-      <div class="lb-entry">
-        <span class="lb-rank ${rc[i]}">${i+1}</span>
-        <span class="lb-name">${e.name}${e.uid === currentUser?.uid ? ' (you)' : ''}</span>
-        <span class="lb-time">${e.time.toFixed(1)}s</span>
-      </div>
-    `).join('');
-  } else {
-    // Personal best times for current target
-    if (currentUser?.isGuest) {
-      c.innerHTML = '<div class="lb-empty">Sign in to track your times</div>';
-      return;
-    }
-    const rec = userRecords[target];
-    if (!rec) { c.innerHTML = '<div class="lb-empty">You haven\'t solved this number yet</div>'; return; }
-    c.innerHTML = `
-      <div class="lb-entry">
-        <span class="lb-rank gold">★</span>
-        <span class="lb-name">Best Time</span>
-        <span class="lb-time">${rec.bestTime.toFixed(1)}s</span>
-      </div>
-      <div class="lb-entry">
-        <span class="lb-rank" style="color:var(--blue)">×</span>
-        <span class="lb-name">Times Solved</span>
-        <span class="lb-time" style="color:var(--text)">${rec.solveCount || 1}</span>
-      </div>
-    `;
-  }
-}
-
-function loadBestTime(targetNum) {
-  const el = document.getElementById('bestTime');
-  if (currentUser?.isGuest) { el.textContent = ''; return; }
-  const rec = userRecords[targetNum];
-  el.textContent = rec ? `★ Your best: ${rec.bestTime.toFixed(1)}s` : '';
-}
-
-// ===== STATS OVERLAY =====
-function openHowToPlay() { document.getElementById('howToPlayOverlay').classList.add('show'); }
-function closeHowToPlay() { document.getElementById('howToPlayOverlay').classList.remove('show'); }
-
-function openStats() {
-  if (currentUser?.isGuest) return;
-  renderStatsOverlay();
-  document.getElementById('statsOverlay').classList.add('show');
-}
-function closeStats() { document.getElementById('statsOverlay').classList.remove('show'); }
-
-let statsGridTab = 'personal';
-let globalAllTimes = null;
-
-function renderStatsOverlay() {
-  const keys = Object.keys(userRecords);
-  const solved = keys.length;
-  const total = ALL_TARGETS.length;
-  const times = Object.values(userRecords).map(r => r.bestTime);
-  const avg = times.length ? (times.reduce((s, t) => s + t, 0) / times.length).toFixed(1) : '—';
-  const best = times.length ? Math.min(...times).toFixed(1) : '—';
-  const pct = Math.round((solved / total) * 100);
-
-  document.getElementById('soSolved').textContent = solved;
-  document.getElementById('soTotal').textContent = total;
-  document.getElementById('soAvg').textContent = avg === '—' ? '—' : avg + 's';
-  document.getElementById('soBest').textContent = best === '—' ? '—' : best + 's';
-  document.getElementById('soProgressBar').style.width = pct + '%';
-  document.getElementById('soProgressText').textContent = `${solved} / ${total}`;
-
-  // Load global times for the global tab
-  db.ref('leaderboard').once('value').then((snap) => {
-    globalAllTimes = snap.val() || {};
-    if (statsGridTab === 'global') renderStatsGrid();
-  });
-
-  renderStatsGrid();
-}
-
-function switchStatsGridTab(tab) {
-  statsGridTab = tab;
-  document.getElementById('sgTabPersonal').style.background = tab === 'personal' ? 'var(--accent)' : 'transparent';
-  document.getElementById('sgTabPersonal').style.color = tab === 'personal' ? 'var(--bg)' : 'var(--muted)';
-  document.getElementById('sgTabGlobal').style.background = tab === 'global' ? 'var(--accent)' : 'transparent';
-  document.getElementById('sgTabGlobal').style.color = tab === 'global' ? 'var(--bg)' : 'var(--muted)';
-  document.getElementById('statsGridLabel').textContent = tab === 'personal' ? 'Tap a number to play it' : 'Global best times — tap to play';
-  renderStatsGrid();
-}
-
-function renderStatsGrid() {
-  const grid = document.getElementById('statsGrid');
-  grid.innerHTML = '';
-
-  for (let i = 0; i <= 100; i++) {
-    const cell = document.createElement('div');
-    cell.className = 'sg-cell';
-
-    if (UNREACHABLE.has(i)) {
-      cell.classList.add('unreachable');
-      cell.innerHTML = `<span class="sg-num">${i}</span>`;
-    } else if (statsGridTab === 'personal') {
-      const rec = userRecords[i];
-      if (rec) {
-        cell.classList.add('solved');
-        cell.innerHTML = `<span class="sg-num">${i}</span><span class="sg-check">✓</span><span class="sg-time">${rec.bestTime.toFixed(1)}s</span>`;
-      } else {
-        cell.innerHTML = `<span class="sg-num">${i}</span>`;
-      }
-      cell.onclick = () => { closeStats(); newGame(i); };
-    } else {
-      // Global best
-      const lb = globalAllTimes && globalAllTimes[i];
-      if (lb) {
-        const bestEntry = Object.entries(lb).map(([n, d]) => ({ name: n, time: d.time })).sort((a, b) => a.time - b.time)[0];
-        if (bestEntry) {
-          cell.classList.add('solved');
-          cell.innerHTML = `<span class="sg-num">${i}</span><span class="sg-check" style="font-size:0.45rem;color:var(--blue);white-space:nowrap;overflow:hidden;max-width:100%;">${bestEntry.name}</span><span class="sg-time">${bestEntry.time.toFixed(1)}s</span>`;
-        } else {
-          cell.innerHTML = `<span class="sg-num">${i}</span>`;
-        }
-      } else {
-        cell.innerHTML = `<span class="sg-num">${i}</span>`;
-      }
-      cell.onclick = () => { closeStats(); newGame(i); };
-    }
-    grid.appendChild(cell);
-  }
-}
-
-// ===== CONFETTI =====
-const canvas = document.getElementById('confetti');
-const ctx = canvas.getContext('2d');
-let particles = [], animFrame;
-function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-resizeCanvas(); window.addEventListener('resize', resizeCanvas);
-
-function fanfare() {
-  const colors = ['#00e6a0','#4ade80','#ffd700','#f97316','#ff4466','#a855f7','#4488ff','#ec4899','#fff'];
-  const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
-  for (let i = 0; i < 180; i++) {
-    const a = Math.random() * Math.PI * 2, sp = 4 + Math.random() * 12;
-    particles.push({ x: cx, y: cy, vx: Math.cos(a)*sp*(0.5+Math.random()), vy: Math.sin(a)*sp*(0.5+Math.random())-4,
-      color: colors[Math.floor(Math.random()*colors.length)], size: 4+Math.random()*7,
-      rotation: Math.random()*360, rotSpeed: (Math.random()-0.5)*14, life: 1,
-      decay: 0.006+Math.random()*0.01, shape: Math.random()>0.5?'rect':'circle' });
-  }
-  if (!animFrame) animateConfetti();
-}
-
-function animateConfetti() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  for (let i = particles.length-1; i >= 0; i--) {
-    const p = particles[i];
-    p.x += p.vx; p.y += p.vy; p.vy += 0.16; p.vx *= 0.99;
-    p.rotation += p.rotSpeed; p.life -= p.decay;
-    if (p.life <= 0) { particles.splice(i, 1); continue; }
-    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rotation*Math.PI/180);
-    ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
-    if (p.shape === 'rect') ctx.fillRect(-p.size/2, -p.size/4, p.size, p.size/2);
-    else { ctx.beginPath(); ctx.arc(0, 0, p.size/2, 0, Math.PI*2); ctx.fill(); }
-    ctx.restore();
-  }
-  if (particles.length > 0) animFrame = requestAnimationFrame(animateConfetti);
-  else animFrame = null;
-}
-
-// ===== KEYBOARD =====
-document.addEventListener('keydown', (e) => {
-  if (!document.getElementById('authOverlay').classList.contains('hidden')) return;
-  if (document.getElementById('statsOverlay').classList.contains('show')) { if (e.key === 'Escape') closeStats(); return; }
-  if (document.getElementById('pickerOverlay').classList.contains('show')) { if (e.key === 'Escape') closePicker(); return; }
-  if (document.getElementById('resultOverlay').classList.contains('show')) return;
-  if (e.key === '+' || e.key === '=') selectOpByKey('+');
-  else if (e.key === '-') selectOpByKey('-');
-  else if (e.key === '*' || e.key === 'x') selectOpByKey('*');
-  else if (e.key === '/') { e.preventDefault(); selectOpByKey('/'); }
-  else if (e.key === 'Enter') compute();
-  else if (e.key === 'z' && (e.ctrlKey || e.metaKey)) undoLast();
-});
-
-function selectOpByKey(op) {
-  const btn = document.querySelector(`.op-btn[data-op="${op}"]`);
-  if (btn) selectOp(btn);
-}
-</script>
 </body>
 </html>
