@@ -8,7 +8,7 @@ export async function applyMigration(db) {
 }
 
 export async function freshDb() {
-  const db = new PGlite();
+  const db = new PGlite({ parsers: { 20: (x) => x } }); // BIGINT as string, like node-postgres
   await db.exec("CREATE ROLE number_crunch_owner; GRANT ALL ON SCHEMA public TO number_crunch_owner");
   await applyMigration(db);
   return db;
