@@ -6,7 +6,7 @@ Live at https://crunch.blackcatmatrix.com, self-hosted on John's PC with Docker 
 
 Number Crunch is a number puzzle for the browser: combine 1, 2, 3, 4 and 5 with + − × ÷ to hit the target. Sign in with your shared Black Cat Matrix account (Keycloak) to save times and appear on the leaderboard; guests can play without saving.
 
-Solves are verified server-side: the server replays the submitted steps and times the round with its own clock. Every saved time comes from a valid solution, is bounded by the server's clock (never longer than the server measured, at most 1.5 s shorter) and is never below 1 s; a round the server timed under 1 s is rejected. A fast, scripted solver can still post a real-looking time, so see "Removing bad times" below.
+Solves are verified server-side: the server replays the submitted steps and times the round with its own clock. Every saved time comes from a valid solution, is bounded by the server's clock (never longer than the server measured, at most 1.5 s shorter) and is never below 1 s; a round the server timed under 1 s is rejected. Times imported from the old Firebase leaderboard were not verified this way. A fast, scripted solver can still post a real-looking time, so see "Removing bad times" below.
 
 It is a small Node server (`server/server.mjs`) that serves `public/` and a JSON API, backed by its own PostgreSQL database `number_crunch` on the shared `bcm-postgres`.
 
@@ -28,6 +28,7 @@ Configuration comes from environment variables in protected files outside the so
 - `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`: the Keycloak realm and this game's confidential client.
 - `AUTH_ENCRYPTION_KEY`: encrypts the server-side sessions.
 - `DATABASE_URL`: the runtime connection string for `number_crunch`.
+- `MIGRATION_DATABASE_URL`: the migration connection string. Used only by `scripts/migrate.mjs` and `scripts/import-firebase.mjs`, from the protected `number-crunch.migration.env`. It is never given to the runtime.
 - `AUTH_ALLOW_HTTP_LOCALHOST=true` (optional): allows an `http://localhost` origin, for the dev client.
 - `APP_ENV_FILE` (optional): a path the server loads with `process.loadEnvFile` instead of getting the variables from Compose.
 

@@ -46,7 +46,7 @@ async function boot() {
   if (callbackFailed || ssoDenied) history.replaceState(null, '', '/');
   let me = null;
   // A timeout counts as unavailable, like any other failure.
-  try { me = await api('/api/me', undefined, AbortSignal.timeout(10_000)); } catch { /* shown below */ }
+  try { me = await api('/api/me', undefined, AbortSignal.timeout?.(10_000)); } catch { /* shown below */ }
   if (me) setAccount(me);
   if (me?.user) return enterGame();
   if (me && !callbackFailed && !ssoDenied && !ssoAttempted() && markSsoAttempted()) {
