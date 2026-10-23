@@ -1,0 +1,20 @@
+{
+  "name": "number-crunch",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node server/server.mjs",
+    "test": "node --test",
+    "preview": "node scripts/preview.mjs",
+    "migrate": "node scripts/migrate.mjs",
+    "deploy": "bash scripts/deploy.sh"
+  },
+  "dependencies": {
+    "@blackcat/auth": "file:vendor/blackcat-auth-0.1.2.tgz",
+    "pg": "^8.16"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.14"
+  }
+}

@@ -67,3 +67,10 @@ node_modules/
 
 # dataconnect generated files
 .dataconnect
+
+# Server
+.build-id
+cloudflared/*.json
+
+# Vendored packages
+!vendor/*.tgz
