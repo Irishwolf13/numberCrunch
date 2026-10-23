@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Number Crunch has moved</title>
+<style>
+  :root { --bg: #0a0a12; --surface: #13131f; --border: #2a2a3e; --text: #e0e0f0; --muted: #6a6a8a; --accent: #00e6a0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; }
+  .box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 2.5rem 2rem; max-width: 400px; text-align: center; }
+  h1 { font-size: 1.6rem; margin-bottom: 0.75rem; color: var(--accent); }
+  p { color: var(--muted); line-height: 1.6; margin-bottom: 1.25rem; }
+  a { display: inline-block; padding: 0.8rem 1.6rem; border-radius: 10px; background: var(--accent); color: var(--bg); font-weight: 700; text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>Number Crunch has moved</h1>
+  <p id="note">Number Crunch now uses your Black Cat Matrix account. Taking you there…</p>
+  <a href="https://crunch.blackcatmatrix.com/">Play Number Crunch</a>
+</div>
+<script>
+  // This is the retired Firebase Hosting site. While DNS for crunch.blackcatmatrix.com
+  // finishes switching, a browser may still land here on that hostname: reload later
+  // instead of redirecting to itself in a loop.
+  if (location.hostname === 'crunch.blackcatmatrix.com') {
+    document.getElementById('note').textContent = 'Number Crunch is updating. This page will reload in a moment.';
+    setTimeout(() => location.reload(), 30000);
+  } else {
+    location.replace('https://crunch.blackcatmatrix.com/');
+  }
+</script>
+</body>
+</html>
