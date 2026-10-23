@@ -1,0 +1,26 @@
+# Fresh Linux install inside the image; never copy host node_modules.
+node_modules
+**/node_modules
+
+# Environment files stay outside the image.
+.env*
+**/.env*
+*.env
+**/*.env
+
+# Tunnel credentials: compose bind-mounts ./cloudflared into the cloudflared
+# container; they must never be baked into the web image.
+cloudflared
+
+# Not needed at runtime.
+.git
+.gitignore
+.superpowers
+.claude
+docs
+test
+.firebase
+firebase.json
+.firebaserc
+*.log
+README*.md

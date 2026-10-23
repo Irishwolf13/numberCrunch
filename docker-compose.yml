@@ -1,0 +1,86 @@
+# Self-hosted production stack: Number Crunch server + Cloudflare Tunnel.
+# Run with: docker compose up -d --build (or npm run deploy, which checks first).
+# Account and database secrets come from
+# C:/ProgramData/BlackCatMatrix/accounts/clients/number-crunch.env.
+# The tunnel config + credentials live in ./cloudflared (JSON creds gitignored).
+# Never run `docker compose config` without --quiet: it expands secrets.
+name: numbercrunch
+
+services:
+  web:
+    build: .
+    image: numbercrunch-web
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - C:/ProgramData/BlackCatMatrix/accounts/clients/number-crunch.env
+    networks:
+      default: {}
+      accounts:
+        aliases:
+          - accounts
+    # Local smoke-test access only; players come in via the tunnel.
+    ports:
+      - "127.0.0.1:3010:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Dev client (number-crunch-dev, origin http://localhost:3110). Not started by
+  # default: docker compose --profile dev up -d --build web-dev
+  web-dev:
+    profiles: ["dev"]
+    build: .
+    image: numbercrunch-web
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - C:/ProgramData/BlackCatMatrix/accounts/clients/number-crunch.development.env
+    networks:
+      default: {}
+      accounts:
+        aliases:
+          - accounts
+    ports:
+      - "127.0.0.1:3110:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "--config", "/etc/cloudflared/config.yml", "run"]
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro
+    depends_on:
+      web:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  accounts:
+    external: true
+    name: bcm-apps
