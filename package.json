@@ -5,7 +5,7 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "start": "node server/server.mjs",
-    "test": "node --test",
+    "test": "node --test \"test/**/*.test.mjs\"",
     "preview": "node scripts/preview.mjs",
     "migrate": "node scripts/migrate.mjs",
     "deploy": "bash scripts/deploy.sh"
