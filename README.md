@@ -4,9 +4,9 @@ Live at https://crunch.blackcatmatrix.com, self-hosted on John's PC with Docker 
 
 ## What it is
 
-Number Crunch is a daily number puzzle for the browser. Sign in with your shared Black Cat Matrix account (Keycloak) to save times and appear on the leaderboard; guests can play without saving.
+Number Crunch is a number puzzle for the browser: combine 1, 2, 3, 4 and 5 with + − × ÷ to hit the target. Sign in with your shared Black Cat Matrix account (Keycloak) to save times and appear on the leaderboard; guests can play without saving.
 
-Solves are verified server-side: the server replays the submitted steps and bounds the solve time by its own clock, so the leaderboard cannot be filled with made-up times.
+Solves are verified server-side: the server replays the submitted steps and times the round with its own clock. Every saved time comes from a valid solution, is bounded by the server's clock (never longer than the server measured, at most 1.5 s shorter) and is never below 1 s; a round the server timed under 1 s is rejected. A fast, scripted solver can still post a real-looking time, so see "Removing bad times" below.
 
 It is a small Node server (`server/server.mjs`) that serves `public/` and a JSON API, backed by its own PostgreSQL database `number_crunch` on the shared `bcm-postgres`.
 
@@ -23,6 +23,15 @@ npm run preview
 ## Accounts
 
 Configuration comes from environment variables in protected files outside the source tree and outside OneDrive:
+
+- `APP_ORIGIN`: the public origin, e.g. `https://crunch.blackcatmatrix.com`. Writes must carry exactly this `Origin`.
+- `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`: the Keycloak realm and this game's confidential client.
+- `AUTH_ENCRYPTION_KEY`: encrypts the server-side sessions.
+- `DATABASE_URL`: the runtime connection string for `number_crunch`.
+- `AUTH_ALLOW_HTTP_LOCALHOST=true` (optional): allows an `http://localhost` origin, for the dev client.
+- `APP_ENV_FILE` (optional): a path the server loads with `process.loadEnvFile` instead of getting the variables from Compose.
+
+The files:
 
 - `C:/ProgramData/BlackCatMatrix/accounts/clients/number-crunch.env`: production runtime (client `number-crunch`).
 - `C:/ProgramData/BlackCatMatrix/accounts/clients/number-crunch.development.env`: dev runtime (client `number-crunch-dev`, origin `http://localhost:3110`).
@@ -43,7 +52,13 @@ Backups: the shared accounts repo's daily backup includes `number_crunch`.
 
 ## Legacy import
 
-The old Firebase leaderboard was imported once, on 2026-10-23, from the protected snapshot `C:/ProgramData/BlackCatMatrix/accounts/imports/number-crunch-firebase-20261023`. The importer (`scripts/import-firebase.mjs`) is idempotent and runs like the migration, with the migration env file and the snapshot available to the container. A signed-in player whose verified email matches an old account takes over its times automatically.
+The old Firebase leaderboard was imported once, on 2026-10-23, from the protected snapshot `C:/ProgramData/BlackCatMatrix/accounts/imports/number-crunch-firebase-20261023`. The importer (`scripts/import-firebase.mjs`) is idempotent, so running it again changes nothing. It runs like the migration, with the snapshot mounted read-only (in Git Bash, `MSYS_NO_PATHCONV=1` stops `/snapshot` being rewritten to a Windows path):
+
+```bash
+MSYS_NO_PATHCONV=1 docker run --rm --network bcm-apps --env-file C:/ProgramData/BlackCatMatrix/accounts/clients/number-crunch.migration.env -v C:/ProgramData/BlackCatMatrix/accounts/imports/number-crunch-firebase-20261023:/snapshot:ro numbercrunch-web node scripts/import-firebase.mjs /snapshot
+```
+
+A signed-in player whose verified email matches an old account takes over its times automatically.
 
 ## Deploy
 
@@ -53,7 +68,7 @@ A push to GitHub deploys nothing. The deploy runs on John's PC, from Git Bash (f
 npm run deploy
 ```
 
-It runs `npm test` on the host (the image omits the PGlite dev dependency), then `docker compose up -d --build`, then polls `http://127.0.0.1:3010/api/health` for up to 90 seconds and prints `{"ok":true,"build":"<12 hex>"}`. Any failure stops it with a non-zero exit.
+It runs `npm test` on the host (the image omits the PGlite dev dependency), tags the current `numbercrunch-web` image as `numbercrunch-web:previous` (if there is one), then `docker compose up -d --build`, then polls `http://127.0.0.1:3010/api/health` for up to 90 seconds and prints `{"ok":true,"build":"<12 hex>"}`. Last, it fetches `/api/me` (account configuration) and `/api/bests` (database); if either fails it prints the last 40 `web` log lines. Any failure stops it with a non-zero exit. When accounts fail, the server logs only `Number Crunch accounts unavailable`, never the raw error.
 
 The stack (`docker-compose.yml`, project name `numbercrunch`):
 
@@ -82,12 +97,24 @@ Always route DNS by uuid, never by tunnel name. This PC runs several tunnels, an
 
 ## Rollback
 
-Before deploying, tag the current image: `docker tag numbercrunch-web numbercrunch-web:previous`. To roll back, point the name back at that tag and restart without building:
+`npm run deploy` tags the image it is about to replace as `numbercrunch-web:previous`. To roll back, point the name back at that tag and restart without building:
 
 ```bash
-docker tag numbercrunch-web:previous numbercrunch-web
-docker compose up -d --no-build --no-deps web
+docker tag numbercrunch-web:previous numbercrunch-web && docker compose up -d --no-build --no-deps web
 ```
+
+`web` and `web-dev` share the `numbercrunch-web` image, so `docker compose --profile dev up --build web-dev` rebuilds the image that production restarts from (and that the next deploy tags as `:previous`). It leaves `:previous` itself alone, so a rollback still works after a dev rebuild.
+
+## Removing bad times
+
+To remove a vandal's times, find their player id from their display name, then delete their rows (`best_times` holds every saved time):
+
+```bash
+docker exec -i bcm-accounts-postgres-1 psql -U bcm_admin -d number_crunch -c "SELECT id, display_name FROM players WHERE display_name ILIKE '%<name>%'"
+docker exec -i bcm-accounts-postgres-1 psql -U bcm_admin -d number_crunch -c "DELETE FROM best_times WHERE player_id = '<id>'"
+```
+
+Check the `SELECT` matches exactly one player before deleting. The player can still sign in and post new times.
 
 ## Known limits
 
