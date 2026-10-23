@@ -15,6 +15,7 @@ let moves = [];             // [{numbers before the step, step: {a, b, op}}], th
 let round = null;           // {target, roundId: Promise} for a signed-in player's server round
 let gameSeq = 0, lbSeq = 0; // drop async results that belong to an earlier game or leaderboard load
 let timerStart = 0, timerInterval = null;
+let resultMs = 0;           // the result time: the client's until the server answers with the saved one
 let lbTab = 'global', lb = { state: 'loading', entries: [] };
 let statsTab = 'personal', globalBests = null, bestsFailed = false;
 let overlayReturn = null;
@@ -44,7 +45,8 @@ async function boot() {
   const ssoDenied = params.has('auth_error');
   if (callbackFailed || ssoDenied) history.replaceState(null, '', '/');
   let me = null;
-  try { me = await api('/api/me'); } catch { /* shown below */ }
+  // A timeout counts as unavailable, like any other failure.
+  try { me = await api('/api/me', undefined, AbortSignal.timeout(10_000)); } catch { /* shown below */ }
   if (me) setAccount(me);
   if (me?.user) return enterGame();
   if (me && !callbackFailed && !ssoDenied && !ssoAttempted() && markSsoAttempted()) {
@@ -116,17 +118,25 @@ function signOut() {
 }
 
 // ===== API =====
-async function api(path, body) {
-  const res = await fetch(path, body === undefined ? { cache: 'no-store' } : {
-    method: 'POST', cache: 'no-store', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+async function api(path, body, signal) {
+  const res = await fetch(path, body === undefined ? { cache: 'no-store', signal } : {
+    method: 'POST', cache: 'no-store', signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`${path} failed with ${res.status}`);
+  if (!res.ok) throw Object.assign(new Error(`${path} failed with ${res.status}`), { status: res.status });
   return res.json();
+}
+
+// A 401 mid-play means the session ended: the account is refreshed in place (the top bar may turn guest),
+// and the board and timer are left alone.
+function sessionExpired(error) {
+  if (error?.status !== 401) return false;
+  api('/api/me').then(setAccount, () => {});
+  return true;
 }
 
 function startRound(t) {
   const roundId = api('/api/rounds', { target: t }).then((r) => r.roundId);
-  roundId.catch(() => {}); // a failed start is reported when the round finishes
+  roundId.catch(sessionExpired); // a 401 refreshes the account now; any failed start is reported when the round finishes
   return roundId;
 }
 
@@ -137,16 +147,16 @@ async function saveSolve(r, steps, clientMs) {
     $('resultNote').textContent = text;
     $('resultNote').classList.toggle('best', best);
   };
-  if (!account.user) return say('Sign in to save your times.');
-  if (!r) return say('Times save from your next round.');
+  if (!r) return say(account.user ? 'Times save from your next round.' : 'Sign in to save your times.');
   say('Saving your time…');
   try {
     const roundId = await r.roundId;
     const res = await api(`/api/rounds/${encodeURIComponent(roundId)}/finish`, { steps, clientMs });
     account.records[r.target] = { bestMs: res.bestMs, solveCount: res.solveCount };
+    if (seq === gameSeq) { resultMs = res.recordedMs; $('resultTime').textContent = `⏱ ${fmt(resultMs)}`; } // show what was saved
     say(res.personalBest ? 'New personal best!' : `Saved. Your best: ${fmt(res.bestMs)}`, res.personalBest === true);
-  } catch {
-    say("Couldn't save this time.");
+  } catch (error) {
+    say(sessionExpired(error) ? 'Your sign-in expired. Sign in again to save your times.' : "Couldn't save this time.");
   }
   if (r.target === target) { renderBestTime(); loadLeaderboard(target); }
 }
@@ -214,9 +224,10 @@ function finishGame() {
   const ms = Date.now() - timerStart;
   stopTimer();
   $('timer').textContent = fmt(ms);
+  resultMs = ms;
   const won = isTargetHit(numbers[0], target), seq = gameSeq;
   if (won) saveSolve(round, moves.map((m) => m.step), ms);
-  setTimeout(() => { if (seq === gameSeq) showResult(won, ms); }, 400);
+  setTimeout(() => { if (seq === gameSeq) showResult(won); }, 400);
 }
 
 function shakeExpression() {
@@ -406,12 +417,12 @@ function openStats() {
     .then(() => { if ($('statsOverlay').classList.contains('show')) renderStats(); });
 }
 
-function showResult(won, ms) {
+function showResult(won) {
   $('resultEmoji').textContent = won ? '🎉' : '😬';
   $('resultTitle').textContent = won ? 'You got it!' : 'Not quite!';
   $('resultTitle').className = 'result-title ' + (won ? 'win' : 'lose');
   $('resultDetail').textContent = won ? `Target: ${target}` : `You got ${formatNum(numbers[0])}, needed ${target}`;
-  $('resultTime').textContent = won ? `⏱ ${fmt(ms)}` : '';
+  $('resultTime').textContent = won ? `⏱ ${fmt(resultMs)}` : '';
   if (!won) $('resultNote').textContent = '';
   $('resultOverlay').classList.add('show');
   $('resultPrimary').focus();
