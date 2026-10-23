@@ -109,7 +109,8 @@ test("an auth route the package does not handle is a JSON 404", async () => {
   assertJsonApi(res);
 });
 
-test("auth outages on auth routes give 503", async () => {
+test("auth outages on auth routes give 503", async (t) => {
+  const logged = t.mock.method(console, "error", () => {});
   const down = () => { throw new Error("Account configuration is incomplete"); };
   const broken = { ...fakeAuth(), handle: async () => { throw new Error("provider exploded"); } };
   for (const getAuth of [down, () => broken]) {
@@ -118,6 +119,26 @@ test("auth outages on auth routes give 503", async () => {
     assert.deepEqual(await result(res), [503, { error: "authentication_unavailable" }]);
     assertJsonApi(res);
   }
+  assert.equal(logged.mock.callCount(), 2);
+});
+
+test("account outages log one fixed line without the error text", async (t) => {
+  const logged = t.mock.method(console, "error", () => {});
+  const { app } = await setup({ getAuth: () => { throw new Error("provider exploded: client_secret=hunter2"); } });
+  for (const req of [request("/api/me", { user: "ann" }), request("/api/auth/session"), post("/api/rounds", { target: 12 }, { user: "ann" })]) {
+    assert.equal((await app(req)).status, 503, req.url);
+  }
+  const lines = logged.mock.calls.map((c) => c.arguments);
+  assert.deepEqual(lines, Array(3).fill(["Number Crunch accounts unavailable"]));
+  assert.equal(/exploded|hunter2/.test(JSON.stringify(lines)), false);
+});
+
+test("a 503 from the account package passes through and is logged", async (t) => {
+  const logged = t.mock.method(console, "error", () => {});
+  const down = new Response('{"error":"authentication_unavailable"}', { status: 503 });
+  const { app } = await setup({ getAuth: () => ({ ...fakeAuth(), handle: async () => down }) });
+  assert.equal(await app(request("/api/auth/session")), down);
+  assert.deepEqual(logged.mock.calls.map((c) => c.arguments), [["Number Crunch accounts unavailable"]]);
 });
 
 test("writes need the exact app Origin", async () => {
@@ -170,7 +191,8 @@ test("me works for an account without an email", async () => {
   assert.deepEqual(await result(res), [200, { user: { id: "kc-bob", displayName: "Bob" }, accountUrl: ACCOUNT_URL, records: {} }]);
 });
 
-test("me gives 503 when accounts are unavailable", async () => {
+test("me gives 503 when accounts are unavailable", async (t) => {
+  const logged = t.mock.method(console, "error", () => {});
   const down = () => { throw new Error("Account configuration is incomplete"); };
   const broken = { ...fakeAuth(), session: async () => { throw new Error("store down"); } };
   for (const getAuth of [down, () => broken]) {
@@ -179,6 +201,7 @@ test("me gives 503 when accounts are unavailable", async () => {
     assert.deepEqual(await result(res), [503, { error: "authentication_unavailable" }]);
     assertJsonApi(res);
   }
+  assert.equal(logged.mock.callCount(), 2);
 });
 
 async function seedBoard(store) {
@@ -246,6 +269,15 @@ test("starting a round needs a session and a playable target", async () => {
   assert.deepEqual(rows, [{ player_id: "kc-ann", target: 12, started_at: String(clock.now) }]);
 });
 
+test("a round's start time is read before the session lookup", async () => {
+  const { app, auth, clock, db } = await setup();
+  const lookup = auth.session;
+  auth.session = async (req) => { clock.now += 3000; return lookup(req); }; // a slow token refresh
+  const started = clock.now;
+  await startRound(app, "ann", 12);
+  assert.equal(Number((await db.query("SELECT started_at FROM rounds")).rows[0].started_at), started);
+});
+
 test("rounds use the injected id generator", async () => {
   const { app } = await setup({ randomId: () => "44444444-4444-4444-8444-444444444444" });
   assert.equal(await startRound(app, "ann", 12), "44444444-4444-4444-8444-444444444444");
@@ -286,7 +318,7 @@ test("invalid steps are rejected and use up the round", async () => {
 });
 
 test("finish checks the session, round id and clientMs before using the round", async () => {
-  const { app } = await setup();
+  const { app, clock } = await setup();
   const id = await startRound(app, "ann", 12);
   assert.deepEqual(await result(await app(post(`/api/rounds/${id}/finish`, { steps: HOW_TO_PLAY_12, clientMs: 1 }))), [401, { error: "authentication_required" }]);
   for (const bad of ["abc", "11111111-1111-4111-8111-11111111111", "11111111-1111-4111-8111-1111111111111", "%31"]) {
@@ -296,19 +328,30 @@ test("finish checks the session, round id and clientMs before using the round", 
   for (const body of ["{", "[]", { steps: HOW_TO_PLAY_12 }, { steps: HOW_TO_PLAY_12, clientMs: -1 }, { steps: HOW_TO_PLAY_12, clientMs: "100" }, { steps: HOW_TO_PLAY_12, clientMs: null }]) {
     assert.deepEqual(await result(await finish(app, id, body)), [400, { error: "invalid_request" }], JSON.stringify(body));
   }
+  clock.now += 5000;
   assert.equal((await finish(app, id, { steps: HOW_TO_PLAY_12, clientMs: 1 })).status, 200);
 });
 
-test("recorded time is bounded by the server clock", async () => {
+test("recorded time is bounded by the server clock and never below 1 s", async () => {
   const { app, clock } = await setup();
-  for (const [clientMs, recordedMs] of [[100, 8500], [9800, 9800], [20_000, 10_000]]) {
+  for (const [serverMs, clientMs, recordedMs] of [[10_000, 100, 8500], [10_000, 9800, 9800], [10_000, 20_000, 10_000], [1200, 0, 1000]]) {
     const id = await startRound(app, "ann", 12);
-    clock.now += 10_000;
+    clock.now += serverMs;
     const res = await finish(app, id, { steps: HOW_TO_PLAY_12, clientMs });
-    assert.equal((await res.json()).recordedMs, recordedMs, `clientMs ${clientMs}`);
+    assert.equal((await res.json()).recordedMs, recordedMs, `serverMs ${serverMs}, clientMs ${clientMs}`);
   }
-  const instant = await startRound(app, "ann", 12);
-  assert.equal((await (await finish(app, instant, { steps: HOW_TO_PLAY_12, clientMs: 0 })).json()).recordedMs, 1);
+});
+
+test("a solve the server timed under 1 s, or a clock that went backwards, is rejected and records nothing", async () => {
+  const { app, clock, db } = await setup();
+  for (const serverMs of [500, -5000]) {
+    const id = await startRound(app, "ann", 12);
+    clock.now += serverMs;
+    assert.deepEqual(await result(await finish(app, id, { steps: HOW_TO_PLAY_12, clientMs: 400 })), [422, { error: "invalid_solution" }], `serverMs ${serverMs}`);
+    assert.equal((await finish(app, id, { steps: HOW_TO_PLAY_12, clientMs: 400 })).status, 404, "the round is used up");
+  }
+  assert.equal((await db.query("SELECT 1 FROM best_times")).rows.length, 0);
+  assert.deepEqual((await (await app(request("/api/me", { user: "ann" }))).json()).records, {});
 });
 
 test("a round older than ROUND_TTL_MS cannot be finished", async () => {
@@ -414,7 +457,8 @@ test("dotfiles and unlisted extensions are never served", async (t) => {
   }
 });
 
-test("the page still loads when accounts are unavailable", async () => {
+test("the page still loads when accounts are unavailable", async (t) => {
+  t.mock.method(console, "error", () => {});
   const { app } = await setup({ getAuth: () => { throw new Error("Account configuration is incomplete"); } });
   assert.equal((await app(request("/"))).status, 200);
   assert.equal((await app(request("/game-rules.js"))).status, 200);

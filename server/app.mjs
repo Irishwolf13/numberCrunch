@@ -15,6 +15,7 @@ const TYPES = {
   ".json": "application/json; charset=utf-8", ".txt": "text/plain; charset=utf-8",
 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MIN_SOLVE_MS = 1000;
 const CLIENT_CLOCK_SLACK_MS = 1500;
 
 class AuthUnavailable extends Error {}
@@ -23,6 +24,9 @@ const json = (status, body, headers) => new Response(JSON.stringify(body), {
   status, headers: { ...SECURITY_HEADERS, "content-type": "application/json; charset=utf-8", "cache-control": "private, no-store", ...headers },
 });
 const fail = (status, error, headers) => json(status, { error }, headers);
+// A fixed line only: the raw error may carry provider details.
+const logUnavailable = () => console.error("Number Crunch accounts unavailable");
+const unavailable = () => { logUnavailable(); return fail(503, "authentication_unavailable"); };
 
 async function readObject(request) {
   try {
@@ -69,14 +73,16 @@ export function createApp({ origin, getAuth, store, publicDir, vendorFiles = {},
     return json(200, { bests: Object.fromEntries(Object.entries(all).map(([target, { name, ms }]) => [target, { name, ms }])) });
   }
 
+  // The clock is read before the session lookup, so a slow token refresh cannot shorten the recorded time.
   async function startRound(request) {
+    const t = now();
     const { session } = await account(request);
     if (!session) return fail(401, "authentication_required");
     const body = await readObject(request);
     if (!body) return fail(400, "invalid_request");
     if (!isPlayableTarget(body.target)) return fail(400, "invalid_target");
     const roundId = randomId();
-    await store.startRound(roundId, session.user.id, body.target, now());
+    await store.startRound(roundId, session.user.id, body.target, t);
     return json(201, { roundId });
   }
 
@@ -91,9 +97,10 @@ export function createApp({ origin, getAuth, store, publicDir, vendorFiles = {},
     const round = await store.takeRound(id, user.id);
     const serverMs = round && t - round.startedAt;
     if (!round || serverMs > ROUND_TTL_MS) return fail(404, "round_not_found");
-    if (!verifySolution(round.target, body.steps)) return fail(422, "invalid_solution");
+    // Under MIN_SOLVE_MS (or a clock that went backwards) is not a human solve; the round is used up either way.
+    if (serverMs < MIN_SOLVE_MS || !verifySolution(round.target, body.steps)) return fail(422, "invalid_solution");
     // The client's own timer wins inside a small window; the server clock bounds it on both sides.
-    const recordedMs = Math.max(1, Math.max(serverMs - CLIENT_CLOCK_SLACK_MS, Math.min(Math.round(body.clientMs), serverMs)));
+    const recordedMs = Math.max(MIN_SOLVE_MS, serverMs - CLIENT_CLOCK_SLACK_MS, Math.min(Math.round(body.clientMs), serverMs));
     await store.ensurePlayer(user.id, user.displayName, t);
     return json(200, { recordedMs, ...(await store.recordSolve(user.id, round.target, recordedMs, t)) });
   }
@@ -146,17 +153,20 @@ export function createApp({ origin, getAuth, store, publicDir, vendorFiles = {},
     if (!read && !backchannel && request.headers.get("origin") !== origin) return fail(403, "forbidden");
     try {
       if (pathname.startsWith("/api/auth/")) {
+        let response;
         try {
-          return (await getAuth().handle(request)) ?? fail(404, "not_found");
+          response = await getAuth().handle(request);
         } catch {
-          return fail(503, "authentication_unavailable");
+          return unavailable();
         }
+        if (response?.status === 503) logUnavailable();
+        return response ?? fail(404, "not_found");
       }
       if (pathname.startsWith("/api/")) return await api(request, pathname);
       if (!read) return fail(405, "method_not_allowed", { allow: "GET, HEAD" });
       return await serveStatic(request, pathname);
     } catch (error) {
-      if (error instanceof AuthUnavailable) return fail(503, "authentication_unavailable");
+      if (error instanceof AuthUnavailable) return unavailable();
       console.error("Number Crunch request failed");
       return fail(500, "internal_error");
     }
