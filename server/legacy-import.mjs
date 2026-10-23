@@ -60,27 +60,34 @@ export function buildLegacyImport({ leaderboard, records, users, emails, now }) 
 export async function applyLegacyImport(db, data) {
   const { players, bestTimes, claims } = buildLegacyImport(data);
   const now = data.now;
-  const run = async (text, params) => (await db.query(text, params)).rows.length;
+  const run = async (text, params) => (await db.query(text, params)).rows;
   await db.query("BEGIN");
   try {
-    const out = {
-      players: await run(
+    // Only players inserted by this run get times and claims: a claimed legacy player keeps its row
+    // but loses its times, so re-inserting them would duplicate a claimed account's records.
+    const fresh = new Set(
+      (await run(
         `INSERT INTO players (id, display_name, legacy, created_at, updated_at)
          SELECT id, name, true, $3::bigint, $3::bigint FROM unnest($1::text[], $2::text[]) AS t(id, name)
-         ON CONFLICT DO NOTHING RETURNING 1`,
+         ON CONFLICT DO NOTHING RETURNING id`,
         [players.map((p) => p.id), players.map((p) => p.displayName), now],
-      ),
-      bestTimes: await run(
+      )).map((r) => r.id),
+    );
+    const times = bestTimes.filter((b) => fresh.has(b.playerId));
+    const newClaims = claims.filter((c) => fresh.has(c.legacyPlayerId));
+    const out = {
+      players: fresh.size,
+      bestTimes: (await run(
         `INSERT INTO best_times (player_id, target, best_ms, solve_count, best_at, last_solved_at)
          SELECT * FROM unnest($1::text[], $2::smallint[], $3::int[], $4::int[], $5::bigint[], $6::bigint[])
          ON CONFLICT DO NOTHING RETURNING 1`,
-        [bestTimes.map((b) => b.playerId), bestTimes.map((b) => b.target), bestTimes.map((b) => b.bestMs), bestTimes.map((b) => b.solveCount), bestTimes.map((b) => b.bestAt), bestTimes.map((b) => b.lastSolvedAt)],
-      ),
-      claims: await run(
+        [times.map((b) => b.playerId), times.map((b) => b.target), times.map((b) => b.bestMs), times.map((b) => b.solveCount), times.map((b) => b.bestAt), times.map((b) => b.lastSolvedAt)],
+      )).length,
+      claims: (await run(
         `INSERT INTO legacy_claims (email, legacy_player_id)
          SELECT * FROM unnest($1::text[], $2::text[]) ON CONFLICT DO NOTHING RETURNING 1`,
-        [claims.map((c) => c.email), claims.map((c) => c.legacyPlayerId)],
-      ),
+        [newClaims.map((c) => c.email), newClaims.map((c) => c.legacyPlayerId)],
+      )).length,
     };
     await db.query("COMMIT");
     return out;

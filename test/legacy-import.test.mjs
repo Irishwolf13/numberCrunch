@@ -81,3 +81,14 @@ test("a new account can claim an imported legacy email", async () => {
   assert.deepEqual(await store.records("u1"), { 12: { bestMs: 11900, solveCount: 2 }, 50: { bestMs: 25250, solveCount: 1 } });
   assert.deepEqual(await store.records("legacy:uidAnn001"), {});
 });
+
+test("re-import after a claim does not resurrect the claimed legacy times", async () => {
+  const db = await freshDb();
+  const store = createStore(db);
+  await applyLegacyImport(db, snapshot());
+  await store.ensurePlayer("u1", "Ann", 1);
+  await store.claimLegacy("ann@example.com", "u1", 2);
+  assert.deepEqual(await applyLegacyImport(db, snapshot()), { players: 0, bestTimes: 0, claims: 0 });
+  assert.deepEqual(await store.records("legacy:uidAnn001"), {});
+  assert.deepEqual((await store.leaderboard(12)).map((e) => [e.playerId, e.ms]), [["u1", 11900], ["legacy:oldname", 17000], ["legacy:ghostkey", 40000]]);
+});
