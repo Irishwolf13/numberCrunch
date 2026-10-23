@@ -16,10 +16,8 @@ services:
     env_file:
       - C:/ProgramData/BlackCatMatrix/accounts/clients/number-crunch.env
     networks:
-      default: {}
-      accounts:
-        aliases:
-          - accounts
+      - default
+      - accounts
     # Local smoke-test access only; players come in via the tunnel.
     ports:
       - "127.0.0.1:3010:3000"
@@ -47,10 +45,8 @@ services:
     env_file:
       - C:/ProgramData/BlackCatMatrix/accounts/clients/number-crunch.development.env
     networks:
-      default: {}
-      accounts:
-        aliases:
-          - accounts
+      - default
+      - accounts
     ports:
       - "127.0.0.1:3110:3000"
     healthcheck:
