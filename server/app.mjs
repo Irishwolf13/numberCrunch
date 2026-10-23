@@ -4,7 +4,7 @@ import { isPlayableTarget, verifySolution } from "../public/game-rules.js";
 import { ROUND_TTL_MS } from "./store.mjs";
 
 const SECURITY_HEADERS = {
-  "content-security-policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; form-action 'self' https://accounts.blackcatmatrix.com; frame-ancestors 'none'; base-uri 'none'; object-src 'none'",
+  "content-security-policy": "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://cloudflareinsights.com; form-action 'self' https://accounts.blackcatmatrix.com; frame-ancestors 'none'; base-uri 'none'; object-src 'none'",
   "x-content-type-options": "nosniff",
   "referrer-policy": "same-origin",
   "x-frame-options": "DENY",

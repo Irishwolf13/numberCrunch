@@ -13,7 +13,7 @@ const ORIGIN = "https://crunch.example.test";
 const ACCOUNT_URL = "https://accounts.example.test/realms/test/account/";
 const PUBLIC_DIR = fileURLToPath(new URL("../public/", import.meta.url));
 const VENDOR_FILE = fileURLToPath(import.meta.resolve("@blackcat/auth/browser"));
-const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; form-action 'self' https://accounts.blackcatmatrix.com; frame-ancestors 'none'; base-uri 'none'; object-src 'none'";
+const CSP = "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://cloudflareinsights.com; form-action 'self' https://accounts.blackcatmatrix.com; frame-ancestors 'none'; base-uri 'none'; object-src 'none'";
 const HOSTILE = "<img src=x onerror=alert(1)>";
 const HOW_TO_PLAY_12 = [{ a: 4, b: 3, op: "+" }, { a: 3, b: 2, op: "+" }, { a: 1, b: 0, op: "-" }, { a: 0, b: 1, op: "*" }];
 const USERS = {
