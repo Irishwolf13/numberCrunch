@@ -12,7 +12,7 @@
 
 ## Design
 
-- Identity: Keycloak clients `number-crunch` (production, origin `https://crunch.blackcatmatrix.com`) and `number-crunch-dev` (origin `http://localhost:3109`), cloned from the live `the-grid` client. The infrastructure part (clients, database, protected env files, tunnel, DNS, Firebase) is done by the controller, not by task implementers. Implementers only read the env-var names.
+- Identity: Keycloak clients `number-crunch` (production, origin `https://crunch.blackcatmatrix.com`) and `number-crunch-dev` (origin `http://localhost:3110`), cloned from the live `the-grid` client. The infrastructure part (clients, database, protected env files, tunnel, DNS, Firebase) is done by the controller, not by task implementers. Implementers only read the env-var names.
 - Env contract (same as the other games): `APP_ORIGIN`, `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `AUTH_ENCRYPTION_KEY`, `DATABASE_URL`, optional `AUTH_ALLOW_HTTP_LOCALHOST=true`, optional `APP_ENV_FILE` (path loaded with `process.loadEnvFile`). Migration/import scripts use only `MIGRATION_DATABASE_URL`.
 - Guests can still play with no account. Only signed-in players save times.
 - Silent SSO is tried once per tab (sessionStorage key `blackcat.sso.attempted.v1`), so a player already signed in to another Black Cat Matrix game arrives signed in.
@@ -195,7 +195,7 @@
     - If `APP_ENV_FILE` is set, call `process.loadEnvFile` on it. Require the six env vars; when one is missing, `getAuth` throws "Account configuration is incomplete", like The Grid's `server/auth.ts`.
     - `pg.Pool` with The Grid's settings (`max: 10`, `connectionTimeoutMillis: 5000`, `query_timeout: 5000`, `statement_timeout: 5000`, an error listener that logs `Number Crunch database unavailable`). Lazy `createAuth({..., allowHttpLocalhost: AUTH_ALLOW_HTTP_LOCALHOST === 'true', store: createPostgresAuthStore(pool)})`.
     - Node adapter: copy The Grid's `apps/web/server.ts` request conversion. Build the URL from the configured origin, reject a path that does not start with `/` (400), buffer POST bodies with a 16384-byte cap (413), and write multiple `set-cookie` headers correctly.
-    - Port: `PORT`, or `3000` in production / `3109` otherwise.
+    - Port: `PORT`, or `3000` in production / `3110` otherwise.
     - `buildId` comes from the `.build-id` file at the repo root, else `'dev'`.
     - `vendorFiles['/vendor/bcm-auth-browser.js'] = fileURLToPath(import.meta.resolve('@blackcat/auth/browser'))`.
     - `store.purgeExpired(Date.now())` runs hourly; the timer is `unref()`'d and failures are swallowed with a generic log line.
@@ -323,11 +323,11 @@ Requirements. Each item is a checkable behavior:
   - `ENV NODE_ENV=production PORT=3000`, `USER node`, `EXPOSE 3000`, `CMD ["node","server/server.mjs"]`.
   - `import-firebase.mjs` needs `server/legacy-import.mjs` and `pg`, both of which are present.
 - `docker-compose.yml`: modelled on The Grid's, with project `name: numbercrunch`.
-  - `web` reads `env_file: C:/ProgramData/BlackCatMatrix/accounts/clients/number-crunch.env`, publishes `127.0.0.1:3009:3000`, joins the networks `default` and external `bcm-apps` (alias `accounts`), and has the healthcheck `node -e "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"`. It uses json-file logging with 10m×3.
-  - `web-dev` (profile `dev`) uses the same build, `env_file …/number-crunch.development.env`, `127.0.0.1:3109:3000`, and the same networks.
+  - `web` reads `env_file: C:/ProgramData/BlackCatMatrix/accounts/clients/number-crunch.env`, publishes `127.0.0.1:3010:3000`, joins the networks `default` and external `bcm-apps` (alias `accounts`), and has the healthcheck `node -e "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"`. It uses json-file logging with 10m×3.
+  - `web-dev` (profile `dev`) uses the same build, `env_file …/number-crunch.development.env`, `127.0.0.1:3110:3000`, and the same networks.
   - `cloudflared` is the same as The Grid's and depends on `web` being healthy.
 - `cloudflared/config.yml`: `tunnel: REPLACE_WITH_UUID`, `credentials-file: /etc/cloudflared/REPLACE_WITH_UUID.json`, ingress `crunch.blackcatmatrix.com` to `http://web:3000`, then `http_status:404`.
-- `scripts/deploy.sh`: The Grid's script with `npm test` in place of the typecheck/test steps, and health URL `http://127.0.0.1:3009/api/health`.
+- `scripts/deploy.sh`: The Grid's script with `npm test` in place of the typecheck/test steps, and health URL `http://127.0.0.1:3010/api/health`.
 - `README.md`: What it is. Local dev (`npm install`, `npm test`, `npm run preview`). Accounts (env names, the protected file paths `C:/ProgramData/BlackCatMatrix/accounts/clients/number-crunch{,.development,.migration}.env`, clients `number-crunch`/`number-crunch-dev`). Database (migrate via `docker run --rm --network bcm-apps --env-file <migration env> numbercrunch-web node scripts/migrate.mjs`). Legacy import (one-time; snapshot in protected `C:/ProgramData/BlackCatMatrix/accounts/imports/number-crunch-firebase-20261023`). Deploy (`npm run deploy` from Git Bash). Tunnel recipe (route DNS by uuid). Rollback. Known limits.
 
 - [ ] **Step 1: Write the files.**
