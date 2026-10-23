@@ -1,4 +1,5 @@
 export const ROUND_TTL_MS = 86_400_000;
+export const MAX_OPEN_ROUNDS = 3;
 
 // best_at follows whichever time is faster; the old row wins ties.
 const MERGE_BEST = `
@@ -73,8 +74,17 @@ export function createStore(db) {
       return Object.fromEntries(rows.map((r) => [Number(r.target), toEntry(r)]));
     },
 
+    // A player keeps at most MAX_OPEN_ROUNDS open: the new one plus their newest older ones.
     async startRound(id, playerId, target, now) {
-      await q("INSERT INTO rounds (id, player_id, target, started_at) VALUES ($1, $2, $3, $4)", [id, playerId, target, now]);
+      await q(
+        `WITH pruned AS (
+           DELETE FROM rounds WHERE id IN (
+             SELECT id FROM rounds WHERE player_id = $2 ORDER BY started_at DESC, id DESC OFFSET $5
+           )
+         )
+         INSERT INTO rounds (id, player_id, target, started_at) VALUES ($1, $2, $3, $4)`,
+        [id, playerId, target, now, MAX_OPEN_ROUNDS - 1],
+      );
     },
 
     async takeRound(id, playerId) {

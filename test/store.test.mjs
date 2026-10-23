@@ -71,6 +71,20 @@ test("takeRound is single-use and bound to the player", async () => {
   assert.equal(await store.takeRound(id, "u1"), null);
 });
 
+test("startRound keeps only a player's three newest open rounds", async () => {
+  const { db, store } = await setup();
+  const ids = [1, 2, 3, 4, 5].map((n) => `${n}`.repeat(8) + "-0000-4000-8000-000000000000");
+  const other = "99999999-9999-4999-8999-999999999999";
+  await store.startRound(other, "u2", 12, 50);
+  for (const [i, id] of ids.entries()) await store.startRound(id, "u1", 12, 100 + i);
+  const { rows } = await db.query("SELECT id FROM rounds WHERE player_id = 'u1' ORDER BY started_at");
+  assert.deepEqual(rows.map((r) => r.id), ids.slice(2));
+  assert.equal(await store.takeRound(ids[0], "u1"), null);
+  assert.equal(await store.takeRound(ids[1], "u1"), null);
+  assert.deepEqual(await store.takeRound(ids[4], "u1"), { target: 12, startedAt: 104 });
+  assert.deepEqual(await store.takeRound(other, "u2"), { target: 12, startedAt: 50 });
+});
+
 test("claimLegacy merges legacy records into the account once", async () => {
   const { db, store } = await setup();
   for (const id of ["legacy:a", "legacy:b"]) {
