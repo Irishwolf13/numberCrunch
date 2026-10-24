@@ -137,6 +137,8 @@
     background: transparent; color: var(--muted); transition: all 0.2s;
   }
   .btn-small:hover { border-color: var(--muted); color: var(--text); }
+  .btn-sound { min-width: 2.2rem; padding: 0.4rem 0.5rem; line-height: 1; }
+  .btn-sound[aria-pressed="false"] { opacity: 0.6; }
 
   /* ===== START SCREEN ===== */
   .start-screen {
@@ -267,6 +269,70 @@
   .btn-result:hover { transform: translateY(-1px); }
   .btn-result.primary { background: var(--accent); color: var(--bg); }
   .btn-result.secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+
+  /* Result celebration: the pieces enter in turn; on a best time the badge stamps in on the fanfare's big beat,
+     over spinning rays (gold for a personal best, prism for a global best). */
+  .result-box { position: relative; z-index: 1; }
+  .result-overlay.show .result-emoji { animation: emojiIn 0.7s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+  .result-overlay.show.miss .result-emoji { animation: wobble 0.8s ease both; }
+  .result-overlay.show .result-emoji.bump { animation: emojiBump 0.6s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+  .result-overlay.show .result-title { animation: popUp 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) 0.08s both; }
+  .result-overlay.show .result-detail, .result-overlay.show .result-time { animation: fadeUp 0.4s ease 0.16s both; }
+  .result-overlay.show .result-note, .result-overlay.show .result-buttons { animation: fadeUp 0.4s ease 0.26s both; }
+  .result-overlay.show .result-time.best { animation: timeFlare 0.7s ease both; color: #fff3b0; text-shadow: 0 0 18px rgba(255, 215, 0, 0.8); }
+  .result-box.shake { animation: shake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
+
+  .result-badge {
+    position: absolute; top: 0.5rem; left: 0; right: 0; width: max-content; max-width: 100%; margin: 0 auto;
+    padding: 0.45rem 1.15rem; border-radius: 999px; white-space: nowrap;
+    font-size: 0.8rem; font-weight: 900; letter-spacing: 2.5px; text-transform: uppercase; color: #1f1600;
+    background: linear-gradient(110deg, #ffb800 0%, #ffd700 35%, #fff6c2 50%, #ffd700 65%, #ffb800 100%) 100% 0 / 250% 100%;
+    box-shadow: 0 0 24px rgba(255, 215, 0, 0.55), 0 0 70px rgba(255, 170, 0, 0.3);
+    animation: stamp 0.5s cubic-bezier(0.2, 1.4, 0.35, 1) both, shimmer 2.4s linear 0.6s infinite;
+  }
+  .result-badge::after {
+    content: ''; position: absolute; inset: 0; border-radius: inherit; border: 2px solid #ffd700;
+    pointer-events: none; animation: ring 0.8s ease-out 0.2s both;
+  }
+  .result-badge.global {
+    color: #fff;
+    background-image: linear-gradient(110deg, var(--accent) 0%, var(--blue) 35%, #d9ccff 50%, #a855f7 65%, var(--accent) 100%);
+    box-shadow: 0 0 24px rgba(68, 136, 255, 0.6), 0 0 80px rgba(168, 85, 247, 0.35);
+  }
+  .result-badge.global::after { border-color: #a855f7; }
+
+  .result-rays { position: absolute; inset: 0; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity 0.6s; }
+  .result-rays::before {
+    content: ''; position: absolute; left: 50%; top: 50%; width: 180vmax; height: 180vmax; margin: -90vmax 0 0 -90vmax;
+    background: repeating-conic-gradient(rgba(255, 215, 0, 0.1) 0deg 8deg, transparent 8deg 20deg);
+    -webkit-mask-image: radial-gradient(circle, #000, transparent 40%); mask-image: radial-gradient(circle, #000, transparent 40%);
+  }
+  .result-rays::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, rgba(255, 200, 0, 0.2), transparent 55%); }
+  .result-overlay.glory .result-rays { opacity: 1; }
+  .result-overlay.glory .result-rays::before { animation: spin 30s linear infinite; }
+  .result-overlay.global .result-rays::before {
+    background: repeating-conic-gradient(rgba(0, 230, 160, 0.11) 0deg 8deg, transparent 8deg 15deg, rgba(168, 85, 247, 0.13) 15deg 23deg, transparent 23deg 30deg);
+  }
+  .result-overlay.global .result-rays::after { background: radial-gradient(circle at 50% 50%, rgba(68, 136, 255, 0.24), transparent 55%); }
+
+  @keyframes emojiIn { 0% { transform: translateY(-40px) scale(0.3); opacity: 0; } 100% { transform: none; opacity: 1; } }
+  @keyframes emojiBump { 0% { transform: scale(0.4) rotate(-20deg); } 100% { transform: none; } }
+  @keyframes wobble { 0%, 100% { transform: none; } 20% { transform: rotate(-12deg); } 40% { transform: rotate(10deg); } 60% { transform: rotate(-6deg); } 80% { transform: rotate(3deg); } }
+  @keyframes popUp { 0% { transform: scale(0.6); opacity: 0; } 100% { transform: none; opacity: 1; } }
+  @keyframes fadeUp { 0% { transform: translateY(10px); opacity: 0; } 100% { transform: none; opacity: 1; } }
+  @keyframes timeFlare { 0% { transform: scale(1); } 35% { transform: scale(1.4); } 100% { transform: scale(1); } }
+  @keyframes shake {
+    10%, 90% { transform: translate(-1px, 1px); } 20%, 80% { transform: translate(3px, -2px); }
+    30%, 50%, 70% { transform: translate(-6px, 2px); } 40%, 60% { transform: translate(6px, -1px); }
+  }
+  @keyframes stamp { 0% { transform: scale(2.8) rotate(-10deg); opacity: 0; } 55% { transform: scale(0.92) rotate(-1deg); opacity: 1; } 100% { transform: rotate(-3deg); opacity: 1; } }
+  @keyframes shimmer { 0%, 30% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+  @keyframes ring { 0% { transform: scale(1); opacity: 0.9; } 100% { transform: scale(1.5, 2.2); opacity: 0; } }
+  @keyframes spin { to { transform: rotate(1turn); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .result-overlay.show *, .result-overlay.show *::before, .result-overlay.show *::after { animation: none !important; }
+  }
 
   /* Two-way tab switch (leaderboard and stats grid) */
   .seg { display: flex; margin-bottom: 0.75rem; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
@@ -577,6 +643,7 @@
     <a class="user-badge" id="userBadge" target="_blank" rel="noopener" title="Account settings" hidden></a>
   </div>
   <div class="topbar-right">
+    <button type="button" class="btn-small btn-sound" id="soundBtn" data-action="sound" aria-label="Sound effects" title="Sound effects" aria-pressed="true">🔊</button>
     <button type="button" class="btn-small" data-action="how-to-play">How to Play</button>
     <button type="button" class="btn-small" id="signInBtn" data-action="sign-in">Sign In</button>
     <button type="button" class="btn-small" id="statsBtn" data-action="stats" hidden>My Stats</button>
@@ -638,7 +705,9 @@
 
 <!-- Result -->
 <div class="result-overlay" id="resultOverlay" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
-  <div class="result-box">
+  <div class="result-rays" aria-hidden="true"></div>
+  <div class="result-box" id="resultBox">
+    <div class="result-badge" id="resultBadge" aria-hidden="true" hidden></div>
     <div class="result-emoji" id="resultEmoji">🎉</div>
     <div class="result-title" id="resultTitle">You got it!</div>
     <div class="result-detail" id="resultDetail"></div>

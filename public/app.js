@@ -1,11 +1,14 @@
 // Number Crunch client. All behaviour lives here: the page's CSP forbids inline scripts and handlers.
 import { START_NUMBERS, UNREACHABLE, ALL_TARGETS, applyStep, isTargetHit } from '/game-rules.js';
 import { openAccountWindow } from '/vendor/bcm-auth-browser.js';
+import { cheer, groan, hush, isSoundOn, setSound } from '/fanfare.js';
 
 const SSO_FLAG = 'blackcat.sso.attempted.v1';
 const OP_SYMBOLS = { '+': '+', '-': '−', '*': '×', '/': '÷' };
 const OVERLAYS = ['howToPlayOverlay', 'statsOverlay', 'pickerOverlay']; // topmost first
 const RANKS = ['gold', 'silver', 'bronze', '', ''];
+const BADGES = { first: ['✨', 'First solve'], pb: ['🏅', 'New personal best'], global: ['🏆', 'New global best'] };
+const REVEAL_WAIT_MS = 1200; // the longest a win's result waits for its save
 const $ = (id) => document.getElementById(id);
 
 // ===== STATE =====
@@ -16,12 +19,15 @@ let round = null;           // {target, roundId: Promise} for a signed-in player
 let gameSeq = 0, lbSeq = 0; // drop async results that belong to an earlier game or leaderboard load
 let timerStart = 0, timerInterval = null;
 let resultMs = 0;           // the result time: the client's until the server answers with the saved one
+let tier = 'win', cheered = null; // how this win is celebrated ('first', 'pb' or 'global' once saved), and what has played
 let lbTab = 'global', lb = { state: 'loading', entries: [] };
 let statsTab = 'personal', globalBests = null, bestsFailed = false;
 let overlayReturn = null;
 let accountCleanup = () => {}, accountRegister = false;
 
 const fmt = (ms) => (ms / 1000).toFixed(1) + 's';
+const fmtGain = (ms) => ms < 100 ? (ms / 1000).toFixed(2) + 's' : fmt(ms);
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const formatNum = (n) => Number.isInteger(n) ? n.toString() : parseFloat(n.toFixed(4)).toString();
 const randomTarget = () => ALL_TARGETS[Math.floor(Math.random() * ALL_TARGETS.length)];
 // Focus left on a control that is being hidden would let Enter or Space activate it unseen.
@@ -151,10 +157,18 @@ async function saveSolve(r, steps, clientMs) {
   say('Saving your time…');
   try {
     const roundId = await r.roundId;
+    const prev = account.records[r.target];
     const res = await api(`/api/rounds/${encodeURIComponent(roundId)}/finish`, { steps, clientMs });
     account.records[r.target] = { bestMs: res.bestMs, solveCount: res.solveCount };
-    if (seq === gameSeq) { resultMs = res.recordedMs; $('resultTime').textContent = `⏱ ${fmt(resultMs)}`; } // show what was saved
-    say(res.personalBest ? 'New personal best!' : `Saved. Your best: ${fmt(res.bestMs)}`, res.personalBest === true);
+    if (seq === gameSeq) {
+      resultMs = res.recordedMs; $('resultTime').textContent = `⏱ ${fmt(resultMs)}`; // show what was saved
+      tier = !res.personalBest ? 'win' : res.globalBest ? 'global' : prev ? 'pb' : 'first';
+      say(tier === 'global' ? `The fastest anyone has solved ${r.target}!`
+        : tier === 'first' ? `First solve! ${Object.keys(account.records).length} of ${ALL_TARGETS.length} numbers solved.`
+        : tier === 'pb' ? `${fmtGain(prev.bestMs - res.bestMs)} faster than your old best of ${fmt(prev.bestMs)}`
+        : `Saved. Your best: ${fmt(res.bestMs)}`, tier !== 'win');
+      if (cheered && isShown('resultOverlay')) celebrate(); // the result is already up: the bigger fanfare follows
+    }
   } catch (error) {
     say(sessionExpired(error) ? 'Your sign-in expired. Sign in again to save your times.' : "Couldn't save this time.");
   }
@@ -185,6 +199,7 @@ function playTarget(n) {
 function newGame(t = randomTarget()) {
   gameSeq++;
   target = t; numbers = [...START_NUMBERS]; selectedNums = []; selectedOp = null; moves = [];
+  tier = 'win'; cheered = null;
   round = account.user ? { target: t, roundId: startRound(t) } : null;
   hideResult();
   $('targetNumber').textContent = t;
@@ -226,8 +241,9 @@ function finishGame() {
   $('timer').textContent = fmt(ms);
   resultMs = ms;
   const won = isTargetHit(numbers[0], target), seq = gameSeq;
-  if (won) saveSolve(round, moves.map((m) => m.step), ms);
-  setTimeout(() => { if (seq === gameSeq) showResult(won); }, 400);
+  const saved = won && saveSolve(round, moves.map((m) => m.step), ms);
+  // A win waits a moment for its save, so a personal best can lead the celebration instead of following it.
+  Promise.all([wait(400), Promise.race([saved, wait(REVEAL_WAIT_MS)])]).then(() => { if (seq === gameSeq) showResult(won); });
 }
 
 function shakeExpression() {
@@ -401,6 +417,7 @@ function closeOverlays() {
 function hideResult() {
   $('resultOverlay').classList.remove('show');
   blurWithin($('resultOverlay'));
+  hush();
 }
 
 function openPicker() {
@@ -418,15 +435,65 @@ function openStats() {
 }
 
 function showResult(won) {
+  const o = $('resultOverlay');
+  o.classList.remove('glory', 'global');
+  o.classList.toggle('miss', !won);
+  $('resultBadge').hidden = true;
+  $('resultBox').classList.remove('shake');
+  $('resultEmoji').className = 'result-emoji';
   $('resultEmoji').textContent = won ? '🎉' : '😬';
   $('resultTitle').textContent = won ? 'You got it!' : 'Not quite!';
   $('resultTitle').className = 'result-title ' + (won ? 'win' : 'lose');
   $('resultDetail').textContent = won ? `Target: ${target}` : `You got ${formatNum(numbers[0])}, needed ${target}`;
+  $('resultTime').className = 'result-time';
   $('resultTime').textContent = won ? `⏱ ${fmt(resultMs)}` : '';
   if (!won) $('resultNote').textContent = '';
-  $('resultOverlay').classList.add('show');
+  o.classList.add('show');
   $('resultPrimary').focus();
-  if (won) fanfare();
+  if (won) { countUp(); celebrate(); } else groan();
+}
+
+// Plays this game's celebration. A save that earns a bigger one once the result is up plays that one next.
+function celebrate() {
+  if (cheered === tier) return;
+  cheered = tier;
+  const t = tier, seq = gameSeq, impact = cheer(t);
+  if (t !== 'win') setTimeout(() => { if (seq === gameSeq && isShown('resultOverlay')) stampBadge(t); }, impact);
+}
+
+// Lands on the fanfare's big beat: the badge stamps in, the emoji and time flare, the box shakes.
+function stampBadge(t) {
+  const [emoji, text] = BADGES[t], badge = $('resultBadge');
+  badge.textContent = text;
+  badge.classList.toggle('global', t === 'global');
+  badge.hidden = false;
+  $('resultEmoji').textContent = emoji;
+  $('resultOverlay').classList.add('glory');
+  $('resultOverlay').classList.toggle('global', t === 'global');
+  for (const [id, className] of [['resultEmoji', 'bump'], ['resultTime', 'best'], ['resultBox', 'shake']]) {
+    const node = $(id);
+    node.classList.remove(className);
+    void node.offsetWidth; // restarts the animation
+    node.classList.add(className);
+  }
+}
+
+// The time counts up to the result, landing on the saved time if the save answers on the way.
+function countUp() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const seq = gameSeq, start = performance.now(), node = $('resultTime');
+  requestAnimationFrame(function frame(now) {
+    if (seq !== gameSeq) return;
+    const k = Math.min(1, Math.max(0, (now - start) / 700));
+    node.textContent = `⏱ ${fmt(resultMs * (1 - (1 - k) ** 3))}`;
+    if (k < 1) requestAnimationFrame(frame);
+  });
+}
+
+function renderSound() {
+  const on = isSoundOn();
+  $('soundBtn').textContent = on ? '🔊' : '🔇';
+  $('soundBtn').setAttribute('aria-pressed', on);
 }
 
 // ===== CLICKS =====
@@ -438,6 +505,7 @@ const actions = {
   'sign-out': signOut,
   'guest': enterGame,
   'how-to-play': () => openOverlay('howToPlayOverlay'),
+  'sound': () => { setSound(!isSoundOn()); renderSound(); },
   'stats': openStats,
   'close-overlay': (b) => closeOverlay(b.closest('.overlay')),
   'start-random': () => playTarget(randomTarget()),
@@ -466,43 +534,6 @@ document.addEventListener('click', (e) => {
 $('accountDialog').addEventListener('cancel', (e) => { e.preventDefault(); closeAccount(); });
 for (const type of ['keydown', 'keyup']) $('accountDialog').addEventListener(type, (e) => e.stopPropagation());
 
-// ===== CONFETTI =====
-const canvas = $('confetti');
-const ctx = canvas.getContext('2d');
-let particles = [], animFrame;
-function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-resizeCanvas(); window.addEventListener('resize', resizeCanvas);
-
-function fanfare() {
-  const colors = ['#00e6a0','#4ade80','#ffd700','#f97316','#ff4466','#a855f7','#4488ff','#ec4899','#fff'];
-  const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
-  for (let i = 0; i < 180; i++) {
-    const a = Math.random() * Math.PI * 2, sp = 4 + Math.random() * 12;
-    particles.push({ x: cx, y: cy, vx: Math.cos(a)*sp*(0.5+Math.random()), vy: Math.sin(a)*sp*(0.5+Math.random())-4,
-      color: colors[Math.floor(Math.random()*colors.length)], size: 4+Math.random()*7,
-      rotation: Math.random()*360, rotSpeed: (Math.random()-0.5)*14, life: 1,
-      decay: 0.006+Math.random()*0.01, shape: Math.random()>0.5?'rect':'circle' });
-  }
-  if (!animFrame) animateConfetti();
-}
-
-function animateConfetti() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  for (let i = particles.length-1; i >= 0; i--) {
-    const p = particles[i];
-    p.x += p.vx; p.y += p.vy; p.vy += 0.16; p.vx *= 0.99;
-    p.rotation += p.rotSpeed; p.life -= p.decay;
-    if (p.life <= 0) { particles.splice(i, 1); continue; }
-    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rotation*Math.PI/180);
-    ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
-    if (p.shape === 'rect') ctx.fillRect(-p.size/2, -p.size/4, p.size, p.size/2);
-    else { ctx.beginPath(); ctx.arc(0, 0, p.size/2, 0, Math.PI*2); ctx.fill(); }
-    ctx.restore();
-  }
-  if (particles.length > 0) animFrame = requestAnimationFrame(animateConfetti);
-  else animFrame = null;
-}
-
 // ===== KEYBOARD =====
 const isShown = (id) => $(id).classList.contains('show');
 
@@ -529,4 +560,5 @@ document.addEventListener('keydown', (e) => {
 });
 
 renderAccount();
+renderSound();
 boot();

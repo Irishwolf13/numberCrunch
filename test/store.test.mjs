@@ -16,14 +16,26 @@ test("migration is idempotent", async () => {
 test("recordSolve tracks best, count and personal best", async () => {
   const { store } = await setup();
   await store.ensurePlayer("u1", "Ann", 1);
-  assert.deepEqual(await store.recordSolve("u1", 12, 12000, 10), { bestMs: 12000, solveCount: 1, personalBest: true });
-  assert.deepEqual(await store.recordSolve("u1", 12, 15000, 11), { bestMs: 12000, solveCount: 2, personalBest: false });
-  assert.deepEqual(await store.recordSolve("u1", 12, 9000, 12), { bestMs: 9000, solveCount: 3, personalBest: true });
-  assert.deepEqual(await store.recordSolve("u1", 12, 9000, 13), { bestMs: 9000, solveCount: 4, personalBest: false });
+  assert.deepEqual(await store.recordSolve("u1", 12, 12000, 10), { bestMs: 12000, solveCount: 1, personalBest: true, globalBest: true });
+  assert.deepEqual(await store.recordSolve("u1", 12, 15000, 11), { bestMs: 12000, solveCount: 2, personalBest: false, globalBest: false });
+  assert.deepEqual(await store.recordSolve("u1", 12, 9000, 12), { bestMs: 9000, solveCount: 3, personalBest: true, globalBest: true });
+  assert.deepEqual(await store.recordSolve("u1", 12, 9000, 13), { bestMs: 9000, solveCount: 4, personalBest: false, globalBest: false });
   const records = await store.records("u1");
   assert.deepEqual(records, { 12: { bestMs: 9000, solveCount: 4 } });
   assert.equal(typeof records[12].bestMs, "number");
   assert.equal(typeof records[12].solveCount, "number");
+});
+
+test("recordSolve flags a personal best that is the fastest anyone has", async () => {
+  const { store } = await setup();
+  await store.ensurePlayer("u1", "Ann", 1);
+  await store.ensurePlayer("u2", "Bob", 1);
+  await store.recordSolve("u2", 12, 8000, 10);
+  assert.equal((await store.recordSolve("u1", 12, 9000, 11)).globalBest, false); // a personal best, but Bob is faster
+  assert.equal((await store.recordSolve("u1", 12, 8000, 12)).globalBest, false); // a tie leaves the older time on top
+  assert.equal((await store.recordSolve("u1", 12, 7000, 13)).globalBest, true);
+  assert.equal((await store.recordSolve("u1", 12, 7500, 14)).globalBest, false); // still on top, but not a new best
+  assert.equal((await store.recordSolve("u2", 24, 30000, 15)).globalBest, true); // the first solve anyone has of 24
 });
 
 test("leaderboard returns top 5, ties by earlier best_at, names verbatim", async () => {

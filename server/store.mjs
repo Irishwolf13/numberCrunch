@@ -95,6 +95,7 @@ export function createStore(db) {
       return row ? { target: Number(row.target), startedAt: Number(row.started_at) } : null;
     },
 
+    // A global best is a personal best that beats every other player's time; a tie leaves the older time on top.
     async recordSolve(playerId, target, ms, now) {
       const [row] = await q(
         `WITH prev AS (
@@ -105,13 +106,20 @@ export function createStore(db) {
            ON CONFLICT (player_id, target) DO UPDATE SET ${MERGE_BEST},
              solve_count = best_times.solve_count + 1
            RETURNING best_ms, solve_count
+         ), pb AS (
+           SELECT NOT EXISTS (SELECT 1 FROM prev) OR $3 < (SELECT best_ms FROM prev) AS personal_best
          )
-         SELECT u.best_ms, u.solve_count,
-                NOT EXISTS (SELECT 1 FROM prev) OR $3 < (SELECT best_ms FROM prev) AS personal_best
-         FROM upserted u`,
+         SELECT u.best_ms, u.solve_count, pb.personal_best,
+                pb.personal_best AND NOT EXISTS (
+                  SELECT 1 FROM best_times WHERE target = $2 AND player_id <> $1 AND best_ms <= $3
+                ) AS global_best
+         FROM upserted u, pb`,
         [playerId, target, ms, now],
       );
-      return { bestMs: Number(row.best_ms), solveCount: Number(row.solve_count), personalBest: row.personal_best };
+      return {
+        bestMs: Number(row.best_ms), solveCount: Number(row.solve_count),
+        personalBest: row.personal_best, globalBest: row.global_best,
+      };
     },
 
     async purgeExpired(now) {

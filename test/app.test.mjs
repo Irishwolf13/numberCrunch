@@ -288,7 +288,7 @@ test("finishing a verified round records it once", async () => {
   const id = await startRound(app, "ann", 12);
   clock.now += 12_345;
   const res = await finish(app, id, { steps: HOW_TO_PLAY_12, clientMs: 12_000 });
-  assert.deepEqual(await result(res), [200, { recordedMs: 12_000, bestMs: 12_000, solveCount: 1, personalBest: true }]);
+  assert.deepEqual(await result(res), [200, { recordedMs: 12_000, bestMs: 12_000, solveCount: 1, personalBest: true, globalBest: true }]);
   assertJsonApi(res);
   assert.deepEqual(await result(await finish(app, id, { steps: HOW_TO_PLAY_12, clientMs: 12_000 })), [404, { error: "round_not_found" }]);
   const me = await (await app(request("/api/me", { user: "ann" }))).json();
